@@ -1,0 +1,12 @@
+# 노트북, 데이터, 그림, 보고서(md 제외)는 추적하지 않음
+*.ipynb
+.ipynb_checkpoints/
+data/
+figures/
+reports/*
+!reports/결과보고서.md
+!reports/문제정의서.md
+
+# 파이썬 캐시
+__pycache__/
+*.pyc
