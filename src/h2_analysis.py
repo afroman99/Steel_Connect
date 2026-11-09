@@ -101,3 +101,20 @@ def situations(**kw):
         rows.append(dict(상황=name, 추천=r["verdict"]["pick"], 근거=r["verdict"]["rule"], 그린_빼기_전력망_원per_t=o["green"]["krw_per_t"] - o["grid"]["krw_per_t"],
                          손익분기_탄소가격=r["thresholds"]["ets_breakeven"], 그린_순저감=o["green"]["abate_per_t"], 전력망_순저감=o["grid"]["abate_per_t"]))
     return pd.DataFrame(rows).set_index("상황")
+
+
+def uncertainty(world="kets", n=2000, basis="both", seed=0, h2_output_mt=1.0):
+    """uncertainty = 어시스턴트용 요약. 토네이도(변수 하나씩 바꿨을 때 추천이 뒤집히는가)와 몬테카를로(여러 조건이 함께 불확실할 때 그린이 싼 비율)를 JSON으로 돌려준다.
+    world='kets'(국내 탄소 가격 최근 1년) 또는 'eu'. n 최대 2000. 비율은 가정한 분포에서의 표본 비율이며 현실의 확률이 아니다."""
+    if world not in ("kets", "eu") or basis not in ("avg", "marginal", "both") or not 100 <= n <= 2000:
+        raise ValueError("world는 'kets'|'eu', basis는 'avg'|'marginal'|'both', n은 100~2000")
+    t = tornado(h2_output_mt=h2_output_mt).reset_index()
+    X = monte_carlo(world, int(n), seed, basis)
+    win = X[X.pick == "green"]
+    q = lambda c: [float(v) for v in X.gap.quantile([.05, .5, .95]).round(0)]
+    return dict(h2_output_mt=h2_output_mt, world=world, basis=basis, n=int(n),
+                tornado=[dict(var=r.변수, low=r.낮은값, high=r.높은값, gap_low=float(r.gap_낮음), gap_high=float(r.gap_높음), swing=float(r.swing), flip=bool(r.flip)) for r in t.itertuples()],
+                flips=[r.변수 for r in t.itertuples() if r.flip],
+                mc=dict(green_cheaper_pct=float((X.pick == "green").mean() * 100), gap_p5_median_p95=q(None),
+                        green_win_median=dict(ppa_krw_kwh=float(win.ppa_krw_kwh.median()), price_change=float(win.price_change.median())) if len(win) else None),
+                note="gap = 쇳물 1t당 (그린 - 전력망) 비용(원, 탄소 비용 포함, 음수면 그린이 쌈). 토네이도 범위: 탄소 가격 K-ETS 최근 1년, PPA 130~190원, 배출계수 평균~한계, 부가요금·요금 변동률 허용 범위. 수전해 설비비 제외. 가정한 분포에서의 비율이지 확률이 아니다.")

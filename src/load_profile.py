@@ -1,6 +1,8 @@
 """UCI 부하 데이터 분석 함수: 로딩, 요금 시간대, 요금 계산, 2026 개편·부하 이동 효과. 요금표·시간표는 simulator.py 것을 씀.
 주의: UCI 원본 Load_Type(band 열)은 2018년 옛 시간대(경부하 23~09시)라 요금 계산에 쓰지 않는다. 요금 시간대는 tou_band(한전 공식표)로 붙이고, UCI에서는 부하·계절·요일(평일/토/휴일) 구성만 쓴다."""
 
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
 
@@ -86,3 +88,23 @@ def peak_shave(d, cap, band, reform=False):
     base, new = annual_cost(d, band, reform), annual_cost(d, band, reform, kwh)
     return dict(cap=cap, cut_kwh=d.kwh.sum() - kwh.sum(), cut_pct=(1 - kwh.sum() / d.kwh.sum()) * 100, hours=int((d.kw > cap).sum() / 4),
                 basic_save=base["basic"] - new["basic"], energy_save_upper=base["energy"] - new["energy"])
+
+
+UCI_PATH = Path(__file__).resolve().parent.parent / "data/Steel_industry_data.csv"
+
+
+def peak_tool(cap_kw=None):
+    """peak_tool = 어시스턴트용 부하지속곡선·최대수요 상한 요약(UCI 소규모 사업장 2018, 2026 개편 후 시간대·요금제 A2). 상위 x% 시간의 문턱, 월별 최대, cap_kw(없으면 600·500·400)별 기본요금 절감과 잘라낼 에너지.
+    UCI는 포스코를 대표하지 않는 소규모 사업장이다. 설비(ESS 등) 비용은 반영하지 않는다."""
+    if not UCI_PATH.exists():
+        raise ValueError("UCI 데이터 파일(data/Steel_industry_data.csv)이 없어 계산할 수 없음")
+    d = load_uci(UCI_PATH); band = tou_band(d, "B"); _, kw = load_duration(d)
+    if cap_kw is not None and not 300 <= cap_kw <= 700:
+        raise ValueError(f"cap_kw={cap_kw}: 허용 범위 300~700 kW 밖")
+    base = annual_cost(d, band, True)
+    shave = lambda c: {k: float(v) for k, v in peak_shave(d, c, band, True).items()}
+    return dict(max_kw=float(kw.iloc[0]), top_threshold_kw={f"{p}%": float(kw.iloc[int(len(kw) * p / 100)]) for p in (0.5, 1, 5, 10)},
+                monthly_max_kw={int(m): float(v) for m, v in d.groupby(d.t.dt.month).kw.max().items()},
+                base_cost_million_krw=float(base["total"] / 1e6), base_basic_million_krw=float(base["basic"] / 1e6),
+                shave=[shave(c) for c in ([cap_kw] if cap_kw else (600, 500, 400))],
+                note="UCI 데이터(2018, 소규모 사업장)라 포스코 수치가 아니다. basic_save(기본요금 절감)만 근거로 쓰고 energy_save_upper는 상한 참고값. cut_pct는 연 사용량 대비 잘라낼 에너지 %.")

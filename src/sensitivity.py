@@ -70,3 +70,14 @@ def sweep_selfgen(cuts, **kw):
         rows.append(dict(selfgen_cut=c, loss_twh=r["power"]["selfgen_loss_twh"], add_twh=r["power"]["add_twh"], cost_eok=r["cost"]["total_eok"],
                          abate_mt=r["carbon"]["abate_tco2"] / 1e6, breakeven_ets=r["cost"]["power_cost_per_tco2_krw"] or float("nan")))
     return pd.DataFrame(rows).set_index("selfgen_cut")
+
+
+def selfgen_tool(selfgen_cuts=None, **kw):
+    """selfgen_tool = 어시스턴트용 sweep_selfgen. 자체 발전 감소율별 추가 구매 전력·전력비용·순 저감·손익분기 배출권 가격(원/tCO2)을 JSON으로 돌려준다.
+    selfgen_cuts 기본 [0, 0.05, 0.1, 0.15, 0.2, 0.3](0~0.3 밖은 simulate가 ValueError). 나머지 인자는 Scenario 변수(eaf_mt, h2_mt 등)."""
+    cuts = list(selfgen_cuts or [0, 0.05, 0.10, 0.15, 0.20, 0.30])
+    if len(cuts) > 12:
+        raise ValueError("selfgen_cuts는 최대 12개")
+    df = sweep_selfgen(cuts, **kw).reset_index()
+    rows = [{k: (None if pd.isna(v) else float(v)) for k, v in r.items()} for r in df.to_dict("records")]
+    return dict(rows=rows, note="손익분기 = 전력비용 / 순 저감(None이면 순 저감 0 이하). 전력비용만 비교(설비 투자비·고로 원료비 절감 제외). 자체발전 감소율은 근거가 약한 시나리오 축이라 예측이 아니다.")
