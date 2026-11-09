@@ -59,3 +59,14 @@ def rank_corr(X, Y, metric):
     """rank_corr = 순위상관 점수(정규화). 수치 변수별 스피어만 상관의 제곱을 합 100%로 맞춘 값(고정한 변수·범주형 변수 제외). 분산 기여도가 아니라 영향 순서를 보는 용도."""
     s = pd.Series({k: X[k].corr(Y[metric], method="spearman") for k in RANGE if X[k].nunique() > 1}).pow(2).fillna(0)
     return (s / s.sum() * 100).sort_values(ascending=False)
+
+
+def sweep_selfgen(cuts, **kw):
+    """sweep_selfgen = 자체 발전 감소율(selfgen_cut)을 바꿔 가며 추가 구매 전력·전력비용·순 저감·손익분기 배출권 가격(전력비용 ÷ 순 저감, 원/tCO2)을 표로 돌려준다.
+    순 저감이 0 이하면 손익분기는 NaN. 전력비용만 비교한다(설비 투자비·고로 원료비 절감 미반영)."""
+    rows = []
+    for c in cuts:
+        r = simulate(selfgen_cut=c, **kw)
+        rows.append(dict(selfgen_cut=c, loss_twh=r["power"]["selfgen_loss_twh"], add_twh=r["power"]["add_twh"], cost_eok=r["cost"]["total_eok"],
+                         abate_mt=r["carbon"]["abate_tco2"] / 1e6, breakeven_ets=r["cost"]["power_cost_per_tco2_krw"] or float("nan")))
+    return pd.DataFrame(rows).set_index("selfgen_cut")
