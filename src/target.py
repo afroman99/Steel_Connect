@@ -1,7 +1,7 @@
 """역방향 계산(목표 -> 필요 조건). simulator가 "전환하면 얼마?"라면 여기는 "목표를 맞추려면 무엇이 얼마나 필요?"에 답한다.
 입력은 simulate와 같은 변수(**kw)이고 허용 범위 밖은 ValueError. 생산량에 비례하는 값만 다루므로 selfgen_cut은 받지 않는다."""
 
-from src.simulator import Scenario, check_range, simulate
+from src.simulator import RANGE, Scenario, check_range, simulate
 
 # fmt: off
 PATHS = ("eaf", "h2")
@@ -71,3 +71,39 @@ def sweep_green(h2_output_mt, target_abate_t, vary, values, green_supply_twh=0.0
         a[vary] = v
         rows.append(dict(**{vary: v}, **min_green(a.pop("h2_output_mt"), a.pop("target_abate_t"), **a)))
     return rows
+
+
+def close_gap(h2_output_mt, target_abate_t, green_supply_twh, **kw):
+    """close_gap = 무탄소 전력이 부족할 때, 조건을 하나씩만 바꿔 부족분(gap_twh)을 0으로 만드는 값을 역산한다(나머지는 그대로). 부족분이 없으면 levers는 빈 목록.
+    레버: 확보량 늘리기, 목표 낮추기, 생산량 조정, 전력 원단위 개선, 전력배출계수 하락, 전기로로 전환. kind는 우리가 정할 수 있는 '결정'인지 바깥 조건인 '외부'인지.
+    in_range=False면 시뮬레이터 허용 범위 밖이라 현실적이지 않다는 뜻이고, check_gap_twh는 그 값을 min_green에 다시 넣어 확인한 부족분(범위 밖이면 None).
+    주의: 연간 전력량 기준(note). 레버를 동시에 바꾸는 조합은 계산하지 않는다. 전환 비용·시점은 반영하지 않는다."""
+    base = min_green(h2_output_mt, target_abate_t, green_supply_twh=green_supply_twh, **kw)
+    if not base["feasible"] or base["met"]:
+        return {**base, "levers": [], **({"reason": base["reason"]} if not base["feasible"] else {})}
+    s = Scenario(**{**kw, "eaf_mt": 0, "h2_mt": h2_output_mt, "h2_util": 1})
+    m, T, S, K, gf, D = h2_output_mt, target_abate_t, green_supply_twh, s.h2_kwh_t / 1000, s.grid_factor, s.h2_bf_t - s.h2_resid_t
+    B, G = D - T / (m * 1e6), base["green_twh"]                               # B = 1 t당 전력 배출로 쓸 수 있는 여유, G = 필요 무탄소 전력량
+
+    def check(**over):  # 바뀐 조건을 min_green에 다시 넣어 부족분 확인. 범위 밖이면 None
+        a = dict(h2_output_mt=m, target_abate_t=T, green_supply_twh=S, **kw); a.update(over)
+        try: return min_green(a.pop("h2_output_mt"), a.pop("target_abate_t"), **a).get("gap_twh")
+        except ValueError: return None
+
+    def lever(name, label, kind, unit, now, new, **over):
+        rng = RANGE.get(name) if name in RANGE else None
+        ok = new is not None and new > 0 and (rng is None or rng[0] <= new <= rng[1])
+        return dict(lever=name, label=label, kind=kind, unit=unit, now=now, needed=new, in_range=bool(ok), check_gap_twh=check(**{name: new}) if ok else None)
+
+    Tmax = m * 1e6 * (D - K * gf * (1 - S / (m * K)))                         # 확보량 S로 달성 가능한 최대 목표
+    a = K - D / gf                                                           # 생산량 1 Mt 늘 때 필요 무탄소 전력의 변화(음수면 생산을 늘릴수록 필요량이 준다)
+    m2 = (S - T / (1e6 * gf)) / a if a else None
+    den = m * K - S
+    L = [lever("green_supply_twh", "무탄소 전력 확보량 늘리기", "결정", "TWh", S, G),
+         lever("target_abate_t", "목표 순 저감 낮추기", "결정", "tCO2/년", T, Tmax),
+         lever("h2_output_mt", "수소환원 생산량 조정(같은 목표를 더 큰/작은 규모로)", "결정", "백만 t", m, m2),
+         lever("h2_kwh_t", "전력 원단위 개선(기술)", "외부", "kWh/t", s.h2_kwh_t, 1000 * (S / m + B / gf)),
+         lever("grid_factor", "전력배출계수 하락(전력 믹스 개선)", "외부", "tCO2/MWh", gf, m * B / den if B > 0 and den > 0 else None)]
+    eaf = required_output(T, "eaf", **{k: v for k, v in kw.items() if k == "grid_factor"})
+    L.append(dict(lever="switch_to_eaf", label="같은 목표를 전기로로 달성(무탄소 전력 불필요)", kind="결정", unit="백만 t", now=m, needed=eaf.get("required_mt"), in_range=bool(eaf.get("within_capacity")), power_twh=eaf.get("power_twh"), cost_eok=eaf.get("cost_eok")))
+    return {**base, "levers": L}

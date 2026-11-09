@@ -101,6 +101,11 @@ for bad in (lambda: sweep_green(0.5, 50e4, "plan", [1]), lambda: sweep_green(0.5
     try: bad(); raise AssertionError("거절돼야 함")
     except ValueError: pass
 assert call_tool("sweep_green", {"h2_output_mt": 0.5, "target_abate_t": 50e4, "vary": "green_supply_twh", "values": [0, 0.5]})["status"] == "ok" and call_tool("sweep_green", {"vary": "x"})["status"] == "ask", "도구 래퍼 sweep"
+from src.target import close_gap
+cg = close_gap(0.5, 50e4, 0.3)
+assert not cg["met"] and len(cg["levers"]) == 6 and all(l["check_gap_twh"] is not None and abs(l["check_gap_twh"]) < 1e-9 for l in cg["levers"] if l["lever"] != "switch_to_eaf" and l["in_range"]), "close_gap 각 레버를 다시 넣으면 부족분 0"
+assert close_gap(0.5, 50e4, 5.0)["levers"] == [] and close_gap(0.5, 150e4, 0.3)["levers"] == [], "부족분 없음/불가능이면 레버 없음"
+assert call_tool("close_gap", {"h2_output_mt": 0.5, "target_abate_t": 50e4})["status"] == "ask" and call_tool("close_gap", {"h2_output_mt": 0.5, "target_abate_t": 50e4, "green_supply_twh": 0.3})["status"] == "ok", "도구 래퍼 close_gap"
 from src.assistant_tools import TOOL_SCHEMAS, TOOLS, VARS
 assert set(TOOL_SCHEMAS) == set(TOOLS) and set(TOOL_SCHEMAS["simulate"]["properties"]) == set(VARS), "도구 스키마와 도구 목록·변수 일치"
 import pandas as pd

@@ -27,3 +27,9 @@ for r in sweep_green(0.5, 50e4, "h2_kwh_t", [2700, 3480, 3720, 4000]): print(f" 
 print("[전력배출계수를 바꿔 가면] 필요 무탄소 비율")
 for r in sweep_green(0.5, 50e4, "grid_factor", [0.30, 0.4173, 0.50]): print(f"  {r['grid_factor']} -> {r['green_share']:.0%}")
 print(f"  ※ {r['note']}")
+
+# 5. 부족할 때 무엇을 바꿔야 메워지나: 조건을 하나씩만 바꿔 부족분을 0으로 만드는 값 (조합은 계산하지 않음)
+from src.target import close_gap
+g = close_gap(0.5, 50e4, 0.3)
+print(f"\n[수소환원 50만 t/년, 목표 50만 t, 무탄소 확보 0.3 TWh] 필요 {g['green_twh']:.2f} TWh, 부족 {g['gap_twh']:.2f} TWh -> 하나씩 바꾼다면")
+for l in g["levers"]: print(f"  [{l['kind']}] {l['label']}: {l['now']:,.4g} -> {l['needed']:,.4g} {l['unit']}" + ("" if l["in_range"] else " (허용 범위 밖)"))
