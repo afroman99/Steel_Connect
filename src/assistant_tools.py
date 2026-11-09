@@ -11,7 +11,7 @@ from src.target import SWEEP_VARS, close_gap, compare_paths, min_green, required
 # fmt: off
 VARS = [f.name for f in fields(Scenario)]
 REQUIRED = {"simulate": ["eaf_mt 또는 h2_mt"], "required_output": ["target_abate_t", "path"], "min_green": ["h2_output_mt", "target_abate_t"], "sweep_green": ["h2_output_mt", "target_abate_t", "vary", "values"], "close_gap": ["h2_output_mt", "target_abate_t", "green_supply_twh"], "compare_paths": ["target_abate_t"], "breakeven_grid": []}
-TOOLS = {  # LLM 도구 정의용 설명. 변수 의미·단위·허용 범위는 reports/시나리오_변수표.md
+TOOLS = {  # LLM 도구 정의용 설명. 변수 의미·단위·허용 범위는 reports/결과보고서.md 부록 E-1
  "simulate": "시나리오 계산: 추가 전력(TWh)·탄소(tCO2)·요금(억 원). 인자는 Scenario 변수(eaf_mt, h2_mt, eaf_util, grid_factor, plan, ets_price 등).",
  "required_output": "목표 순 저감(target_abate_t, tCO2/년)을 달성하는 필요 생산량·전력·요금. path는 'eaf' 또는 'h2'(h2_green 등 추가 가능).",
  "min_green": "수소환원 생산량(h2_output_mt)으로 목표 순 저감을 달성하는 최소 무탄소 비율·전력량·부족분(green_supply_twh는 사용자 가정).",

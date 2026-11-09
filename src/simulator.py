@@ -1,4 +1,4 @@
-"""전환 시나리오 시뮬레이터 v0.5. 변수·출처·신뢰도는 reports/시나리오_변수표.md 참고.
+"""전환 시나리오 시뮬레이터 v0.5. 변수·출처·신뢰도는 reports/결과보고서.md 부록 E-1 참고.
 
 입력: simulate(**변수) 또는 SCENARIOS[이름]. 허용 범위 밖 값은 ValueError (어시스턴트가 "근거 없음"으로 거절하는 근거).
 출력: dict {input, power, carbon, cost, assumptions, sources}

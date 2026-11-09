@@ -1,7 +1,7 @@
 """어시스턴트 연결 예시: Claude가 계산 도구(src/assistant_tools.py)를 호출해 질문에 답하는 최소 루프.
 계산은 call_tool(코드), 해석·설명은 LLM. 준비: pip install anthropic, 환경변수 ANTHROPIC_API_KEY. 실행: 프로젝트 루트에서
 python3 analysis/10_어시스턴트_예시.py "수소환원 50만 t/년으로 순 저감 50만 t을 하려면 무탄소 전력이 몇 %나 필요해?"
-질문을 안 주면 질문 세트(N11, M01, R03)로 시연한다. 모델·옵션은 바꿔도 된다(MODEL). 계산 규칙은 reports/어시스턴트_입출력_명세.md."""
+질문을 안 주면 질문 세트(N11, M01, R03)로 시연한다. 모델·옵션은 바꿔도 된다(MODEL). 계산 규칙은 reports/결과보고서.md 부록 E-5."""
 
 import json
 import sys
