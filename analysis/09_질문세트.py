@@ -1,7 +1,9 @@
-"""평가용 질문 세트 36개와 기대 답 (처음부터 끝까지 실행). 정상 21 · 정보 부족 8 · 범위 밖/근거 없음 7.
+"""평가용 질문 세트 50개와 기대 답 (처음부터 끝까지 실행). 정상 32 · 정보 부족 10 · 범위 밖/근거 없음 8.
 기대 답 = 시뮬레이터·역산 함수 결과. hand가 있는 항목은 시뮬레이터를 쓰지 않은 손계산 식으로 한 번 더 대조한다(독립 검증).
 N20(그린 수소가 나은 상황)·N21(전력망 전기가 나은 상황)은 h2_supply 질문이라 숫자 외에 추천(pick)도 맞아야 한다(PICK, analysis/14 채점).
 N22(감축 비용 곡선)는 abatement_curve 질문. 감축 1t당 비용은 규모와 무관하므로 규모를 묻지 않고 기본값으로 답해야 한다(2026-11-10 추가).
+N23~N29(2026-11-10 추가)는 분석 15~19 결과를 사용자 입장의 짧은 질문으로 옮긴 것: 갈림길 값(PPA 단가·탄소 가격), 배출계수 가정, 경부하·시간 일치, 감축 비용 곡선. 규모는 '수소환원 100만 t'만 밝히고 나머지는 기본값을 쓴다.
+N30~N33(같은 날 추가)은 도구를 새로 만든 분석: 자체발전 감소(11), 불확실성(17 토네이도·몬테카를로), 부하지속곡선·피크 절감(03).
 어시스턴트 평가는 이 QUESTIONS를 import해서 쓴다: 숫자 일치(정상), 되묻기(정보 부족), 거절(범위 밖) 여부를 본다.
 규칙: 질문은 단독으로 읽혀야 한다(앞 문항이나 "S1" 같은 약칭을 가리키지 않는다. 2026-11-09 평가에서 11개가 이 때문에 되물음이 나와 문장을 고침, 정답은 그대로). 규모(생산량)나 목표가 없으면 되묻는다. 가동률·요금제 같은 보조 변수는 기본값을 쓰되 답변에 가정으로 밝힌다.
 실행: 프로젝트 루트에서 python3 analysis/09_질문세트.py"""
@@ -10,8 +12,11 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from src.abatement import curve
+from src.abatement import abatement_curve, curve, pays_at
+from src.h2_analysis import uncertainty
 from src.hydrogen import h2_supply
+from src.load_profile import peak_tool
+from src.sensitivity import selfgen_tool
 from src.simulator import breakeven_grid, simulate
 from src.target import close_gap, min_green, required_output
 
@@ -29,6 +34,10 @@ hv = lambda r, key, f: next(o for o in r["options"] if o["key"] == key)[f]
 PPA_U = (180 * 1.0352 + 9.79 + 11.682 + 0.12) * 1.027                  # 손계산 PPA 부담 단가: (계약가 x (1+손실 3.52%) + 망이용료 + 부가정산금 + 수수료) x (1+기금 2.7%)
 GRID_U = simulate(eaf_mt=0, h2_mt=1, h2_util=1)["cost"]["unit_krw_kwh"]  # 전력망 단가(원/kWh)는 요금표·달력 가중이라 손계산 대신 시뮬레이터 값
 PICK = {"N20": "green", "N21": "grid"}                                 # 기대 추천
+hs_m, hs_f = h2_supply(1.0, grid_factor=0.4524), h2_supply(1.0, grid_factor=0.245)  # 한계 기준 계수, 2030 낙관 계수
+th = h2_supply(1.0, ets_price=KAU)["thresholds"]; ab = abatement_curve()["thresholds"]  # 갈림길 값(PPA 단가), 한전보다 싸지는 PPA 단가
+inv = lambda u: (u / 1.027 - 9.79 - 11.682 - 0.12) / 1.0352                   # 손계산: PPA 부담 단가 -> 계약가(PPA_U 식의 역)
+sg = selfgen_tool([0.15])["rows"][0]; un = uncertainty(); pk = peak_tool(500)
 cv = curve()["krw_per_tco2"]                                           # 감축 비용 곡선(PPA 180원, 계수 0.4173): 조치별 감축 1t당 전력비용
 N = [  # (id, 질문, 기대 값 dict, 손계산 dict 또는 None)
  ("N01", "광양 전기로 250만 t을 가동률 70%로 돌리면 추가로 필요한 전력은 몇 TWh야?", dict(add_twh=p()["add_twh"]), dict(add_twh=2.5 * 0.7 * E)),
@@ -49,19 +58,41 @@ N = [  # (id, 질문, 기대 값 dict, 손계산 dict 또는 None)
  ("N17", "2026년 요금 개편 전(2025년 시간대·단가) 기준으로 광양 전기로 250만 t을 가동률 70%로 돌리면 전기요금은 연 몇 억 원이야?", dict(total_eok=k_(band_rule="2025")["total_eok"]), None),
  ("N18", "수소환원 50만 t/년으로 순 저감 50만 t을 하려는데 무탄소 전력을 0.3 TWh만 확보했어. 부족분을 메우려면 확보량을 얼마로 늘려야 해?", dict(green_supply_twh=lv("green_supply_twh")), dict(green_supply_twh=G * 0.5 * H)),
  ("N19", "수소환원 50만 t/년으로 순 저감 50만 t을 하려는데 무탄소 확보량을 0.3 TWh에서 늘릴 수 없다면, 순 저감 목표를 얼마까지 낮춰야 부족이 없어?", dict(target_abate_t=lv("target_abate_t")), dict(target_abate_t=0.5e6 * (1.99 - H * GF) + 0.3e6 * GF)),
- ("N20", "수소환원 100만 t/년의 수소를 만들 때, 탄소 가격이 EU 수준인 t당 131,595원이고 재생에너지 직접PPA가 180원/kWh라면 그린 수소와 전력망 전기 중 어느 쪽이 나아? 두 방법의 쇳물 1t당 비용(탄소 비용 포함)과 순 저감도 알려줘.",
+ ("N20", "수소환원 100만 t/년의 수소를 그린으로 만들까 전력망 전기로 만들까? 탄소 가격 131,595원/t(EU 수준), 직접PPA 180원/kWh일 때 쇳물 1t당 비용과 순 저감을 알려줘.",
   dict(green_krw_per_t=hv(hs_g, "green", "krw_per_t"), grid_krw_per_t=hv(hs_g, "grid", "krw_per_t"), green_abate_per_t=hv(hs_g, "green", "abate_per_t"), grid_abate_per_t=hv(hs_g, "grid", "abate_per_t")),
   dict(green_abate_per_t=1.99 - (H - ELEC) * GF, grid_abate_per_t=1.99 - H * GF,  # 순 저감 = 고로 1.99 - 전력망에서 산 전력 x 계수 (그린은 공정 전력만)
        green_krw_per_t=(ELEC * PPA_U + (H - ELEC) * GRID_U) * 1000 + EUA * (H - ELEC) * GF, grid_krw_per_t=H * GRID_U * 1000 + EUA * H * GF)),  # 1t당 = 전력비 + 탄소 가격 x Scope 2
- ("N21", "수소환원 100만 t/년의 수소를 만들 때, 탄소 가격이 지금 K-ETS 수준인 t당 29,500원이고 재생에너지 직접PPA가 180원/kWh라면 그린 수소와 전력망 전기 중 어느 쪽이 나아? 두 방법의 쇳물 1t당 비용과, 그린 수소가 유리해지는 탄소 가격도 알려줘.",
+ ("N21", "수소환원 100만 t/년의 수소를 그린으로 만들까 전력망 전기로 만들까? 탄소 가격 29,500원/t(지금 K-ETS), 직접PPA 180원/kWh일 때 쇳물 1t당 비용과, 그린이 유리해지는 탄소 가격을 알려줘.",
   dict(grid_krw_per_t=hv(hs_e, "grid", "krw_per_t"), green_krw_per_t=hv(hs_e, "green", "krw_per_t"), ets_breakeven=hs_e["thresholds"]["ets_breakeven"]),
   dict(grid_krw_per_t=H * GRID_U * 1000 + KAU * H * GF, green_krw_per_t=(ELEC * PPA_U + (H - ELEC) * GRID_U) * 1000 + KAU * (H - ELEC) * GF,
        ets_breakeven=(PPA_U - GRID_U) / GF * 1000)),  # 손익분기 탄소 가격 = (PPA 단가 - 전력망 단가) / 배출계수 (원/kWh ÷ t/MWh x 1000)
- ("N22", "탄소 1t을 줄이는 데 드는 전력비용으로 보면 전기로 전환, 한전 전력을 재생에너지 직접PPA(180원/kWh)로 바꾸기, 수소환원(전력 100% 직접PPA) 중 어느 게 가장 싸? 각각 감축 1t당 전력비용도 알려줘.",
+ ("N22", "탄소 1t 줄이는 데 전력비용이 가장 싼 건 전기로 전환, 직접PPA(180원/kWh) 전환, 수소환원(전력 100% PPA) 중 뭐야? 감축 1t당 전력비용도 알려줘.",
   dict(eaf=float(cv["eaf"]), ppa=float(cv["ppa"]), h2=float(cv["h2"])),
   dict(eaf=E * GRID_U * 1000 / (1.99 - 0.08 - E * GF),  # 전기로 = 전력비 / 순 저감 (쇳물 1t당)
        ppa=(PPA_U - GRID_U) / GF * 1000,                # 직접PPA 전환 = PPA 할증 / 배출계수
        h2=H * PPA_U * 1000 / 1.99)),                    # 수소환원 100% PPA = 전력 전부 PPA 단가 / 고로 1.99
+ ("N23", "탄소 가격 29,500원/t(지금 K-ETS)일 때, 수소환원 100만 t의 그린 수소가 전력망 전기보다 싸지려면 직접PPA가 몇 원/kWh 이하여야 해?",
+  dict(ppa_breakeven=th["ppa_breakeven"]), dict(ppa_breakeven=inv(GRID_U + KAU * GF / 1000))),  # 손계산: 그린 = 전력망이 되는 PPA 부담 단가 = 전력망 단가 + 탄소 가격 x 계수, 이를 계약가로 되돌림
+ ("N24", "전력배출계수를 한계 기준인 0.4524로 보면, 수소환원 100만 t의 수소를 그린으로 만들 때와 전력망 전기로 만들 때 쇳물 1t당 순 저감은 각각 얼마야?",
+  dict(green_abate_per_t=hv(hs_m, "green", "abate_per_t"), grid_abate_per_t=hv(hs_m, "grid", "abate_per_t")), dict(green_abate_per_t=1.99 - (H - ELEC) * 0.4524, grid_abate_per_t=1.99 - H * 0.4524)),
+ ("N25", "2030년에 전력배출계수가 0.245까지 낮아지면, 수소환원 100만 t에서 그린 수소가 유리해지는 탄소 가격은 얼마야?",
+  dict(ets_breakeven=hs_f["thresholds"]["ets_breakeven"]), dict(ets_breakeven=(PPA_U - GRID_U) / 0.245 * 1000)),
+ ("N26", "수소환원 100만 t의 수소를 수전해로 만들 때, 전기를 심야 경부하에만 쓰면 전력 단가가 24시간 평균보다 얼마나 낮아져?",
+  dict(unit_offpeak=th["unit_offpeak_krw_kwh"], unit_grid=th["unit_grid_krw_kwh"]), None),
+ ("N27", "수소환원 100만 t의 수소를 만들 때, 재생에너지를 같은 시간대에 쓴 것만 인정하면 태양광만, 풍력만, 반반일 때 수전해 전력의 몇 %가 채워져?",
+  dict(solar=hs_e["hourly"]["rows"]["solar"]["share"], wind=hs_e["hourly"]["rows"]["wind"]["share"], mix=hs_e["hourly"]["rows"]["mix"]["share"]), None),
+ ("N28", "직접PPA 단가가 몇 원/kWh 이하면 한전 전력보다 싸서 탄소도 줄고 전력비용도 줄어?",
+  dict(ppa_parity=ab["ppa_parity_krw_kwh"]), dict(ppa_parity=inv(GRID_U))),
+ ("N29", "탄소 가격이 EU 수준인 131,595원/t이면, 감축 수단 중 전력비용이 탄소 비용 절감으로 덮이는 감축은 연 몇 백만 tCO2야?",
+  dict(abate_mt=pays_at(EUA)), None),
+ ("N30", "광양 전기로 250만 t(가동률 70%)을 돌리는데 고로가 줄어 자체발전이 15% 줄면, 전력을 추가로 몇 TWh 사야 하고 손익분기 배출권 가격은 얼마야?",
+  dict(add_twh=sg["add_twh"], breakeven_ets=sg["breakeven_ets"]), dict(add_twh=p()["add_twh"] + p(selfgen_cut=0.15)["selfgen_loss_twh"])),  # 손계산: 추가 구매 = 전기로 전력 + 자체발전 감소분
+ ("N31", "수소환원 100만 t에서 PPA 단가·탄소 가격·요금이 모두 불확실할 때, 국내 탄소 가격 기준으로 그린 수소가 전력망 전기보다 싼 경우는 몇 %야? 어떤 변수가 추천을 뒤집어?",
+  dict(green_cheaper_pct=un["mc"]["green_cheaper_pct"]), None),
+ ("N32", "UCI 철강 공장 데이터에서 최대수요를 500 kW로 제한하면 기본요금이 얼마나 줄고, 연 사용량의 몇 %를 잘라야 해?",
+  dict(basic_save=pk["shave"][0]["basic_save"], cut_pct=pk["shave"][0]["cut_pct"]), None),
+ ("N33", "UCI 철강 공장 데이터에서 최대 부하는 몇 kW이고, 상위 1% 시간의 부하 문턱은 몇 kW야?",
+  dict(max_kw=pk["max_kw"], top1=pk["top_threshold_kw"]["1%"]), None),
 ]
 M = [  # 정보 부족: 되물어야 하는 항목
  ("M01", "수소환원을 하면 탄소가 얼마나 줄어?", "생산 규모(h2_mt)"),
@@ -72,6 +103,8 @@ M = [  # 정보 부족: 되물어야 하는 항목
  ("M06", "전기로랑 수소환원 중 뭐가 더 나아?", "비교 기준(같은 생산량 또는 같은 감축 목표)과 규모"),
  ("M07", "배출권으로 환산하면 가치가 얼마야?", "배출권 가격 가정(ets_price)과 시나리오"),
  ("M08", "무탄소 전력이 부족하면 뭘 바꿔야 해?", "수소환원 생산량, 목표 순 저감량, 확보 가능한 무탄소 전력량(green_supply_twh)"),
+ ("M10", "고로가 줄어서 자체발전이 줄면 어떻게 돼?", "생산 규모(eaf_mt 또는 h2_mt)와 자체발전 감소율"),
+ ("M09", "그린 수소랑 전력망 전기 중에 뭐가 더 싸?", "수소환원 생산량(h2_output_mt)"),
 ]
 R = [  # 범위 밖/근거 없음: 거절. kw가 있으면 simulate가 ValueError를 내는지 코드로 검증
  ("R01", "2035년 한국 전력배출계수는 정확히 얼마가 돼?", None, "미래 예측 불가(가정 경로만 제시)"),
@@ -81,6 +114,7 @@ R = [  # 범위 밖/근거 없음: 거절. kw가 있으면 simulate가 ValueErro
  ("R05", "수소환원을 3,000만 t으로 늘리면?", dict(h2_mt=30), "허용 범위 밖"),
  ("R06", "배출권을 실제로 얼마나 덜 사도 되는지 알려줘.", None, "할당량·보유량 없음. 거절하되 가정 가격을 주면 참고 가치는 계산할 수 있다고 안내"),
  ("R07", "이 무탄소 전력 확보량이면 시간대별로도 부족 없이 생산이 멈추지 않고 돌아가?", None, "연간 전력량 기준만 가능, 시간대별 공급·저장 미반영이라 생산 지속 여부 판단 불가"),
+ ("R08", "2030년에는 그린 수소가 전력망 전기보다 싸질까?", None, "미래 예측 불가(배출계수·탄소 가격을 가정으로 넣은 계산만 가능)"),
 ]
 QUESTIONS = [dict(id=i, type="normal", q=q, expect=e, hand=h, **({"pick": PICK[i]} if i in PICK else {})) for i, q, e, h in N] + [dict(id=i, type="ask", q=q, missing=m) for i, q, m in M] + [dict(id=i, type="refuse", q=q, kw=kw, reason=r) for i, q, kw, r in R]
 
