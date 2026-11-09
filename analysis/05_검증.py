@@ -65,6 +65,23 @@ for f, a in ((green_needed, (0,)), (breakeven_grid, (0,))):
     try: f(*a); raise AssertionError("0 입력은 거절돼야 함")
     except ValueError: pass
 assert green_needed(0.1, eaf_net_t=0.5) == 0, "수소환원 순 저감이 이미 전기로 이상이면 0(음수 자름)"
+from src.target import compare_paths, min_green, required_output
+T = 100e4
+r = required_output(T, "eaf"); assert near(S(eaf_mt=r["required_mt"], eaf_util=1, h2_mt=0)["carbon"]["abate_tco2"], T), "역산한 전기로 생산량으로 순방향 계산하면 목표와 일치"
+r = required_output(T, "h2", h2_green=0.5); assert near(S(eaf_mt=0, h2_mt=r["required_mt"], h2_util=1, h2_green=0.5)["carbon"]["abate_tco2"], T) and near(r["power_twh"], S(eaf_mt=0, h2_mt=r["required_mt"], h2_util=1)["power"]["add_twh"]), "수소환원 역산 일치"
+m = min_green(0.5, 50e4); assert near(S(eaf_mt=0, h2_mt=0.5, h2_util=1, h2_green=m["green_share"])["carbon"]["abate_tco2"], 50e4), "min_green이 순방향과 일치"
+assert not min_green(0.5, 150e4)["feasible"] and not required_output(T, "h2", grid_factor=0.56, h2_kwh_t=4000)["feasible"], "불가능 조건은 feasible=False"
+assert len(compare_paths(T)) == 4
+for bad in (lambda: required_output(0), lambda: required_output(True), lambda: required_output(T, "x"), lambda: required_output(T, selfgen_cut=0.1), lambda: min_green(0, T)):
+    try: bad(); raise AssertionError("거절돼야 함")
+    except ValueError: pass
+assert S()["carbon"]["ets_value_eok"] is None, "배출권 가격 없으면 환산하지 않음"
+assert near(S(ets_price=20000)["carbon"]["ets_value_eok"], S()["carbon"]["abate_tco2"] * 2e4 / 1e8), "참고 가치 = 순 저감 x 가정 가격"
+for bad in (5000, 40000, True, "2만"):
+    assert rejects(ets_price=bad), f"ets_price={bad!r} 거절돼야 함"
+from src.assistant_tools import call_tool
+assert call_tool("simulate", {})["status"] == "ask" and call_tool("simulate", {"eaf_mt": 1, "eaf_util": 2})["status"] == "refuse" and call_tool("simulate", {"eaf_mt": 1, "x": 1})["status"] == "refuse" and call_tool("nope")["status"] == "refuse", "도구 래퍼: 되묻기·거절"
+assert call_tool("simulate", {"eaf_mt": 1})["status"] == "ok" and "eaf_util" in call_tool("simulate", {"eaf_mt": 1})["defaults_used"], "기본값 사용 변수 표시"
 print("[내부 정합성] 통과")
 
 # 2. 외부 수치 대조 (일치 여부와 차이를 그대로 보고)

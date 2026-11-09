@@ -29,13 +29,14 @@ REFORM = {"여름": (5.1, 0, -16.9), "봄가을": (5.1, 0, -13.2), "겨울": (5.
 RULES = {"2025": None, "A": {}, "B": {"mid": (11, 13, 14)}}  # 시간대 규칙: 2025 현행 / 개편 A(9~15시 중간) / 개편 B(11~12·13~15시 중간). 둘 다 18~21시 최대
 DATA = Path(__file__).resolve().parent.parent / "data/Steel_industry_data.csv"
 FUNDS = (0.037, 0.032, 0.027)  # 전력산업기반기금 요율: 3.7%(한전 요금표 2023-05 원문) / 3.2%(2024-07~2025-06) / 2.7%(2025-07~, 정부 안내, 원문 재확인 필요). 부가가치세 10%는 사업자 환급 대상이라 제외(가정)
+ETS_RANGE = (10_000, 30_000)  # 배출권 가격 허용 범위 (원/tCO2). 시장 변동이 커서(1만 원대~3만 원 안팎 보도) 넓게 잡음, KRX 원문 미확인
 EAF_CLAIM_T = 1.4  # 포스코 주장 350만 t ÷ 250만 t (경계 미확인)
 TOTAL_TWH, SELF_SHARE, BUY_TWH, SCOPE2_T, SCOPE1_T = 21.0, 0.855, 3.05, 1_399_825, 69_665_353  # 제철소 총전력(역산), 자체생산비율, 2024 구매전력, 2024 Scope 2, Scope 1
 RANGE = dict(eaf_mt=(0, 2.5), eaf_kwh_t=(300, 500), eaf_util=(0.3, 1), selfgen_cut=(0, 0.3), grid_factor=(0.20, 0.56),
              price_change=(-0.1, 0.2), load_factor=(0.6, 1), total_twh=(20, 26), adder=(4, 14), bf_replace=(0, 1), bf_tco2_t=(1.0, 2.1), eaf_direct_t=(0.04, 0.15),
              h2_mt=(0, 2.5), h2_util=(0.3, 1), h2_kwh_t=(2700, 4000), h2_green=(0, 1), h2_bf_t=(1.6, 2.1), h2_resid_t=(0, 0.4))  # 변수별 허용 범위
 LOW_CONF = ["scope2_기준선(0.4541 기반)과 증분(grid_factor) 계수 불일치", "plan(수전 전압·선택요금 미확인)", "eaf_kwh_t", "eaf_util", "selfgen_cut", "price_change", "load_factor",
-            "total_twh(역산, 2021년 3.8÷0.15=25와 2024년 3.05÷0.145=21 두 점)", "adder(기후환경 9원은 2023-01 기준, 연료비조정 ±5원)", "bf_tco2_t(포스코 평균 Scope 1 1.99, 고로 단독값 아님. BF 자체 Scope 2 약 0.04는 양쪽 경로 모두 제외)", "eaf_direct_t(전기로 직접 배출 0.08, 2차 출처 IPCC 2006·JRC 인용, 원문 미확인)", "bf_replace(대체 비율 가정)", "h2_mt(실증 30만t 보도, 상용 규모 근거 없음)", "h2_kwh_t(문헌 2.7~4.0, 포스코 실측 아님)", "h2_green(청정전력 조달 비율 가정)", "h2_bf_t(포스코 평균 Scope 1 원단위, 고로 단독값 아님)", "h2_resid_t(수소환원 잔여 배출, 논문은 0, IEA 근접 제로 0.4 이하)", "band_rule(개편 A/B 미확정)"]
+            "total_twh(역산, 2021년 3.8÷0.15=25와 2024년 3.05÷0.145=21 두 점)", "adder(기후환경 9원은 2023-01 기준, 연료비조정 ±5원)", "bf_tco2_t(포스코 평균 Scope 1 1.99, 고로 단독값 아님. BF 자체 Scope 2 약 0.04는 양쪽 경로 모두 제외)", "eaf_direct_t(전기로 직접 배출 0.08, 2차 출처 IPCC 2006·JRC 인용, 원문 미확인)", "bf_replace(대체 비율 가정)", "h2_mt(실증 30만t 보도, 상용 규모 근거 없음)", "h2_kwh_t(문헌 2.7~4.0, 포스코 실측 아님)", "h2_green(청정전력 조달 비율 가정)", "h2_bf_t(포스코 평균 Scope 1 원단위, 고로 단독값 아님)", "h2_resid_t(수소환원 잔여 배출, 논문은 0, IEA 근접 제로 0.4 이하)", "band_rule(개편 A/B 미확정)", "ets_price(사용자 가정, 시장 변동 큼, KRX 원문 미확인)"]
 SOURCES = {"tariff": "한전 요금표 2025-04 산업용(을)", "buy_twh": "Factbook 2024 p.6", "scope1_2": "Factbook 2024 p.5", "grid_factor": "기후부 보도자료 2025-12-18, 2023 전력배출계수 0.4173(소비단)",
            "eaf_mt": "뉴스룸 광양 전기로 준공", "self_share": "ESG 에너지 페이지", "adder_fund": "한전 요금표 2023-05 (기후환경 9원, 연료비조정 5원 ±5, 기금 3.7·3.2·2.7%)", "bf_tco2_t": "Factbook 2024 Scope 1 69.67Mt ÷ 조강 약 35Mt = 1.99 t/t (역산)", "eaf_direct_t": "전기로 직접 배출 0.06~0.1 t/t (JRC 2012, IPCC 2006 0.08; 2차 출처)", "eaf_claim": "전자신문 2026-05-10 연 최대 350만 t 감축(경계 미명시), 뉴스룸 최대 약 75% 감축(Scope 1&2, 2017~19 평균 대비)",
            "h2_kwh_t": "Vogl 2018 3.48 MWh/tLS, Bhaskar 2020 3.72 MWh/tls (원문 확인)", "h2_mt": "포스코 HyREX 포항 실증 30만 t, 2028 목표 (보도)", "h2_bf_t": "Factbook 2024 Scope 1 69.67Mt ÷ 조강 약 35Mt = 1.99 t/t (역산)", "breakeven": "Bhaskar 2020: 전력배출계수 0.456 초과 시 수소환원 배출 증가"}
@@ -54,6 +55,7 @@ class Scenario:
     load_factor: float = 0.8     # 부하율 (계약전력 = 평균전력 / 부하율)
     plan: str = "B3"             # 요금제: 고압A/B/C(수전 전압) + 선택Ⅰ~Ⅲ. 광양 규모는 154kV 이상(B/C)·월 500시간 초과 가동(Ⅲ)으로 가정
     fund: float = 0.027          # 전력산업기반기금 요율. 2025-07 이후 2.7%, 과거 기준 비교용으로 0.032·0.037 허용
+    ets_price: float | None = None  # 배출권 가격 가정 (원/tCO2). 없으면 환산 가치를 계산하지 않음. 참고 가치일 뿐 실제 구매 회피액이 아님(할당량·보유량 필요)
     adder: float = 9.0           # 기후환경요금+연료비조정요금 (원/kWh). 기본은 기후환경 9원, 연료비조정은 0
     total_twh: float = TOTAL_TWH  # 제철소 총 전력 사용 (TWh). 자체 발전 감소분 계산의 바탕
     bf_replace: float = 1.0      # 전기로 생산이 고로 생산을 대체하는 비율 (Scope 1 감축 계산용)
@@ -80,6 +82,10 @@ def check_range(s):
             raise ValueError(f"{k}={v!r}: 숫자가 아님 (근거 없음)")
         if not lo <= v <= hi:
             raise ValueError(f"{k}={getattr(s, k)}: 허용 범위 {lo}~{hi} 밖 (근거 없음)")
+    if s.ets_price is not None:
+        v = s.ets_price
+        if isinstance(v, bool) or not isinstance(v, (int, float)) or not ETS_RANGE[0] <= v <= ETS_RANGE[1]:
+            raise ValueError(f"ets_price={v!r}: 허용 범위 {ETS_RANGE[0]}~{ETS_RANGE[1]}원/t 밖 (근거 없음)")
     if s.eaf_basis not in ("bottom_up", "posco_net"):
         raise ValueError(f"eaf_basis={s.eaf_basis!r}: bottom_up 또는 posco_net (근거 없음)")
     if s.fund not in FUNDS:
@@ -125,7 +131,7 @@ def simulate(**kw):
     return dict(
         input=asdict(s),
         power=dict(eaf_output_mt=out_mt, h2_output_mt=h2_mt, eaf_buy_twh=eaf, h2_buy_twh=h2, selfgen_loss_twh=loss, add_twh=add, buy_after_twh=BUY_TWH + add, buy_increase_pct=add / BUY_TWH * 100),
-        carbon=dict(add_tco2=tco2, scope1_cut_tco2=cut, net_tco2=tco2 - cut, abate_tco2=abate, abate_per_mwh=abate / (add * 1e6) if add else 0, scope2_after_t=SCOPE2_T + tco2, scope1_after_t=SCOPE1_T - cut,
+        carbon=dict(add_tco2=tco2, scope1_cut_tco2=cut, net_tco2=tco2 - cut, abate_tco2=abate, abate_per_mwh=abate / (add * 1e6) if add else 0, scope2_after_t=SCOPE2_T + tco2, scope1_after_t=SCOPE1_T - cut, ets_value_eok=None if s.ets_price is None else abate * s.ets_price / 1e8,
                     scope2_increase_pct=tco2 / SCOPE2_T * 100, scope1_cut_pct=cut / SCOPE1_T * 100),
         cost=dict(avg_price_krw_kwh=price, energy_eok=energy / 1e8, basic_eok=basic / 1e8, adder_eok=adder / 1e8, fund_eok=fund / 1e8,
                   total_eok=(energy + basic + adder + fund) / 1e8, unit_krw_kwh=(energy + basic + adder + fund) / kwh if kwh else 0,
