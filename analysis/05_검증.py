@@ -170,6 +170,15 @@ assert near(next(x for x in mx["options"] if x["key"] == "mix")["green_twh"], 1.
 for bad in (dict(h2_kg_t=70), dict(elec_kwh_kg=40), dict(ppa_krw_kwh=100), dict(ets_price=5000), dict(h2_green=1), dict(h2_kwh_t=2800, h2_kg_t=60, elec_kwh_kg=58)):
     try: h2_supply(1.0, **bad); raise AssertionError(f"{bad} 거절돼야 함")
     except ValueError: pass
+assert abs(h2_supply(1.0, price_change=th["price_change_breakeven"])["options"][0]["krw_per_t"] - h2_supply(1.0, price_change=th["price_change_breakeven"])["options"][1]["krw_per_t"]) < 1e-6, "한전 요금 손익분기 변동률에서 두 비용이 같다"
+from src import h2_analysis as HA
+tq = HA.tornado()
+assert bool(tq.loc["ppa_krw_kwh", "flip"]) and not bool(tq.loc["ets_price", "flip"]) and not bool(tq.loc["grid_factor", "flip"]), "PPA 단가는 혼자서 추천을 뒤집고, K-ETS 범위 탄소 가격·배출계수 기준은 못 뒤집는다"
+g40, g60 = HA.gap_scales_with_h2()
+assert g40 > 0 and g60 > 0 and near(g60 / g40, 60 / 40), "수소 원단위는 비용 차 크기만 비례로 바꾸고 추천은 그대로"
+assert (HA.monte_carlo("eu", n=200).pick == "green").mean() > 0.95 and HA.situations().loc["PPA 150원 (정부 태양광 목표 발전단가)", "추천"] == "green", "EU 수준이면 거의 항상 그린, PPA 150원이면 그린"
+tl0 = HA.timeline(years=(2030,), kinds=("2018 기준 하락 속도",)).iloc[0]
+assert near(tl0.손익분기_탄소가격, h2_supply(1.0, grid_factor=tl0.배출계수)["thresholds"]["premium_krw_kwh"] / tl0.배출계수 * 1000), "시점별 손익분기 = PPA 할증 / 배출계수"
 from src.emission_factor import HOUR_GF_RATIO, TOU_GF_RATIO
 from src.hydrogen import HOURLY_MATCH
 assert near(o["offpeak"]["scope2_tco2"], (1e6 * 51 * 52.5 * TOU_GF_RATIO["경"] + 1e6 * (3720 - 51 * 52.5)) / 1000 * 0.4173), "경부하 운전 배출 = 수전해 x 계수 x 경부하 비율 + 공정 x 계수"
@@ -190,6 +199,9 @@ if ext_data.available():  # 외부 원본(data/의 kpx_*·epsis_*·icap_*, ICAP�
     assert ext_data.sales_price()[2025] == 181.9, "2025 산업용 판매단가 181.9원(EPSIS)"
     mall = ext_data.marginal_ef(); avg_i = float((gg.intensity * gg.mwh).sum() / gg.mwh.sum())
     assert 0.9 < sum(mall["share"].values()) < 1.05 and mall["share"]["LNG"] > 0.5 and mall["mef"] > avg_i, "한계 배출: 주요 연료 반응 합 약 1, LNG가 한계 연료, 한계 > 평균"
+    from src.emission_factor import MEF_AVG_RATIO, TOU_MEF_RATIO
+    mt_b = ext_data.marginal_table("band")
+    assert abs(mall["mef"] / avg_i - MEF_AVG_RATIO) < 1e-3 and all(abs(mt_b.loc[b, "한계_비율"] - TOU_MEF_RATIO[b]) < 1e-3 for b in TOU_MEF_RATIO), "한계 배출 비율 상수 = 재계산"
     ms = ext_data.marginal_scenario()
     assert near(ms.loc["한계 기준", "배출계수"], round(0.4173 * mall["mef"] / avg_i, 4)) and (ms["추천"] == "grid").all(), "한계 기준 = 공식 계수 x 한계/평균, 현재 K-ETS에서 추천 그대로"
     assert near(ext_data.fuel_share().sum(), 100) and ext_data.data_checks().loc["kpx_fuel_hourly_2025.csv", "빈칸"] == 0, "연료 비중 합 100%, 거래소 자료 빈칸 없음"

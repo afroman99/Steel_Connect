@@ -11,8 +11,8 @@
 실행: 프로젝트 루트에서 python -m src.hydrogen
 """
 
-from src.emission_factor import TOU_GF_RATIO
-from src.simulator import ETS_RANGE, PPA_ADD, PPA_RANGE, avg_price, band_share, breakeven_grid, finite_number, ppa_unit, simulate
+from src.emission_factor import TOU_GF_RATIO, TOU_MEF_RATIO
+from src.simulator import ETS_RANGE, PLANS, PPA_ADD, PPA_RANGE, avg_price, band_share, breakeven_grid, finite_number, ppa_unit, simulate
 
 # fmt: off
 H2_KG_T, ELEC_KWH_KG = 51.0, 52.5  # 쇳물 1t당 수소 (kg/t, Vogl 2018 51) / 수전해 전력 (kWh/kg, IEA GHR 2025 효율 63%(LHV) = 52.9). 51 x 52.5 = 2,678 kWh/t로 Bhaskar 2020 수전해 2,680 kWh/t와 맞춤
@@ -104,6 +104,8 @@ def h2_supply(h2_output_mt, ets_price=KAU_NOW, ppa_krw_kwh=PPA_DEFAULT, h2_kg_t=
     ets_star = max(prem, 0) / gf * 1000                                   # 이 탄소 가격(원/tCO2)을 넘으면 그린이 싸다
     gf_star = prem * 1000 / ets_price if prem > 0 else 0.0                # 이 배출계수를 넘으면 그린이 싸다
     ppa_star = ((unit_grid + ets_price * gf / 1000) / (1 + inp["fund"]) - PPA_ADD["net"] - PPA_ADD["settle"] - PPA_ADD["fee"]) / (1 + PPA_ADD["loss"])  # 이 계약 단가 이하면 그린이 싸다
+    base_kwh = avg_price(inp["band_rule"], inp["plan"]) + PLANS[inp["plan"]][0] * 12 / 8760 / inp["load_factor"]  # 요금 변동률이 곱해지는 부분(전력량+기본요금, 원/kWh)
+    pc_star = ((unit_ppa - ets_price * gf / 1000) / (1 + inp["fund"]) - inp["adder"]) / base_kwh - 1   # 한전 요금 변동률이 이보다 크면 그린이 싸다
     need_t = None if target_abate_t is None else target_abate_t / t
     cheaper = "green" if G["krw_per_t"] < E["krw_per_t"] else "grid"
     if E["abate_tco2"] <= 0:
@@ -131,18 +133,20 @@ def h2_supply(h2_output_mt, ets_price=KAU_NOW, ppa_krw_kwh=PPA_DEFAULT, h2_kg_t=
         extra.append(f"전력망을 쓰면 그린보다 연 {(E['scope2_tco2'] - G['scope2_tco2']) / 1e4:,.1f}만 tCO2를 더 낸다. 순 저감은 쇳물 1t당 {E['abate_per_t']:.2f} t(그린 {G['abate_per_t']:.2f} t)")
     verdict = dict(pick=pick, rule=rule, reason=why, notes=extra, cheaper_on_cost=cheaper, target_met=None if need_t is None else by[pick]["abate_per_t"] >= need_t)
 
-    thresholds = dict(gf_breakeven_bf=be_bf, ets_breakeven=ets_star, gf_breakeven_cost=gf_star, ppa_breakeven=ppa_star, unit_grid_krw_kwh=unit_grid, unit_ppa_krw_kwh=unit_ppa, premium_krw_kwh=prem,
+    thresholds = dict(gf_breakeven_bf=be_bf, ets_breakeven=ets_star, gf_breakeven_cost=gf_star, ppa_breakeven=ppa_star, price_change_breakeven=pc_star, unit_grid_krw_kwh=unit_grid, unit_ppa_krw_kwh=unit_ppa, premium_krw_kwh=prem,
                       unit_offpeak_krw_kwh=unit_off, offpeak_share=off_share, green_twh_needed=need_twh, extra_abate_per_t=(elec_t / 1000) * gf, max_grid_abate_per_t=E["abate_per_t"], max_green_abate_per_t=G["abate_per_t"])
     green_if = [f"전력배출계수가 {be_bf:.3f} tCO2/MWh 이상: 전력망 수소는 고로보다 배출이 많아 그린 수소만 의미가 있다",
                 (f"탄소 가격이 {ets_star:,.0f}원/tCO2 이상 (지금 가정 {ets_price:,.0f}원)" if prem > 0 else "직접PPA 전력이 한전 전력보다 싸서 탄소 가격과 무관하게 그린 수소가 싸다"),
                 f"직접PPA 계약 단가가 {ppa_star:.0f}원/kWh 이하 (지금 가정 {ppa_krw_kwh:g}원)" if PPA_RANGE[0] <= ppa_star else f"직접PPA 계약 단가가 {ppa_star:.0f}원/kWh 이하 (근거 범위 {PPA_RANGE[0]}원보다 낮아 현재 PPA 시장에서는 해당 없음)",
                 f"전력배출계수가 {gf_star:.3f} 이상 (지금 {gf:g})" if 0 < gf_star < be_bf else "",
+                f"한전 요금이 지금 가정보다 {(pc_star - inp['price_change']) * 100:.0f}% 이상 오를 때 (전력량·기본요금 기준)" if pc_star > inp["price_change"] else "",
                 f"쇳물 1t당 목표 순 저감이 {E['abate_per_t']:.2f} t보다 클 때 (전력망 최대 {E['abate_per_t']:.2f} t, 그린 최대 {G['abate_per_t']:.2f} t)" if E["abate_per_t"] > 0 else ""]
     grid_if = [f"탄소 가격이 {ets_star:,.0f}원/tCO2 미만 (지금 가정 {ets_price:,.0f}원)" if prem > 0 else "",
                f"직접PPA 계약 단가가 {ppa_star:.0f}원/kWh 초과" if prem > 0 else "",
+               f"한전 요금 인상이 {(pc_star - inp['price_change']) * 100:.0f}% 미만일 때" if pc_star > inp["price_change"] else "",
                f"전력배출계수가 {min(gf_star, be_bf):.3f} 미만 (전력망이 깨끗할수록 전력망 수소의 탄소 불리함이 줄어든다)" if prem > 0 else "",
                f"재생에너지 확보량이 부족할 때 (필요 {need_twh:.2f} TWh/년) - 부족분은 전력망으로 채운다",
-               f"요금을 더 줄이려면 수전해를 경부하에 몰아 돌린다: {unit_off:.1f}원/kWh (24시간 평균 {unit_grid:.1f}원), 대신 설비 {1 / off_share:.2f}배와 수소 저장 필요. 탄소는 줄지 않는다(경부하 배출계수 연평균의 {TOU_GF_RATIO['경']:.3f}배)",
+               f"요금을 더 줄이려면 수전해를 경부하에 몰아 돌린다: {unit_off:.1f}원/kWh (24시간 평균 {unit_grid:.1f}원), 대신 설비 {1 / off_share:.2f}배와 수소 저장 필요. 탄소는 거의 그대로다(경부하 배출계수: 평균 기준 {TOU_GF_RATIO['경']:.3f}배, 한계 기준 {TOU_MEF_RATIO['경']:.3f}배)",
                f"재생에너지를 시간 단위로 맞춰야 하면(시간 일치) 태양광만으로는 {hourly['solar']['share'] * 100:.0f}%, 풍력 {hourly['wind']['share'] * 100:.0f}%, 반반 {hourly['mix']['share'] * 100:.0f}%만 채워진다. 나머지는 전력망이나 저장(반반도 부하 {hourly['mix']['storage_h']:.0f}시간분)이 필요하다"]
     cell = lambda f, p: "bf" if f >= be_bf else ("green" if prem - p * f / 1000 < 0 else "grid")
     mp = dict(gf=list(GF_AXIS), ets=list(ETS_AXIS), cells=[[cell(f, p) for f in GF_AXIS] for p in ETS_AXIS],
