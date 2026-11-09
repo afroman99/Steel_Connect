@@ -2,6 +2,7 @@
 
 import numpy as np
 import pandas as pd
+from scipy import stats
 
 # fmt: off
 # 소비단 전력배출계수 (tCO2eq/MWh). 2023만 확정값, 2010~2022 단년도는 참고용 산출(공식 3년 평균 0.4541과 기준이 다름). 2021~23 평균 0.4330과 일치하는지로 라벨 판독을 검산함
@@ -10,10 +11,13 @@ GRID = pd.Series([0.5439, 0.5435, 0.5401, 0.5515, 0.5177, 0.5167, 0.5037, 0.5151
 
 def trend(start=2010):
     """trend = 추세. start년부터 2023년까지 직선을 맞춰 연간 변화(기울기)와 95% 신뢰구간, 데이터 점 수를 돌려준다. 점이 적어 신뢰구간이 넓다."""
-    y = GRID.loc[start:]; x = y.index.values.astype(float)
+    y = GRID.loc[start:]
+    if len(y) < 4:
+        raise ValueError("추세는 표본 4개 이상(start<=2020) 필요")
+    x = y.index.values.astype(float)
     b, a = np.polyfit(x, y.values, 1)
     n = len(y); se = np.sqrt(((y.values - (a + b * x)) ** 2).sum() / (n - 2) / ((x - x.mean()) ** 2).sum())
-    t = {4: 2.776, 12: 2.179}.get(n - 2, 2.0)  # t 분포 95% 임계값 (표본 6개, 14개일 때)
+    t = stats.t.ppf(0.975, n - 2)  # t 분포 95% 임계값
     return dict(slope=b, lo=b - t * se, hi=b + t * se, n=n, intercept=a)
 
 

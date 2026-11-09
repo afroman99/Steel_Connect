@@ -1,6 +1,6 @@
 """탄소 저감 경로 비교 (처음부터 끝까지 실행): 같은 1백만 t을 전기로 vs 수소환원으로 만들 때 전력·탄소·비용, 그리고 전력배출계수가 바뀌면 어떻게 달라지나.
 실행: 프로젝트 루트에서 python3 analysis/06_경로비교.py  (그림은 figures/에 저장)
-주의: 전기로는 포스코 주장(1.4 t/t), 수소환원은 포스코 평균 Scope 1(1.99 t/t)과 논문 전력 원단위라 기준이 섞여 있다. 고철 공급 한계와 설비 투자비는 반영하지 않았다.
+경계: 두 경로 모두 고로 Scope 1 1.99 t/t 대비(전기로는 직접 배출 0.08 + 구매 전력 배출, 수소환원은 논문 전력 원단위). 포스코 주장 순감축 1.4 t/t는 참고 행으로 따로 표시. 고철 공급 한계와 설비 투자비는 반영하지 않았다.
 """
 
 import sys
@@ -19,7 +19,8 @@ from src.simulator import Scenario, breakeven_grid, simulate
 setup_korean_font()
 GF = Scenario().grid_factor  # 0.4173 (2023 확정)
 PATHS = {"전기로(고철)": dict(eaf_mt=1, eaf_util=1, h2_mt=0), "수소환원(전력망)": dict(eaf_mt=0, h2_mt=1, h2_util=1),
-         "수소환원(무탄소 50%)": dict(eaf_mt=0, h2_mt=1, h2_util=1, h2_green=0.5), "수소환원(무탄소 100%)": dict(eaf_mt=0, h2_mt=1, h2_util=1, h2_green=1.0)}
+         "수소환원(무탄소 50%)": dict(eaf_mt=0, h2_mt=1, h2_util=1, h2_green=0.5), "수소환원(무탄소 100%)": dict(eaf_mt=0, h2_mt=1, h2_util=1, h2_green=1.0),
+         "전기로(포스코 주장 순감축 1.4)": dict(eaf_mt=1, eaf_util=1, h2_mt=0, eaf_basis="posco_net")}
 
 # 1. 같은 1백만 t을 만들 때 (전력배출계수 0.4173)
 rows = {}

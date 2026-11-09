@@ -16,3 +16,4 @@ __pycache__/
 .claude/
 # PDF 근거자료는 추적하지 않음
 *.pdf
+.ruff_cache

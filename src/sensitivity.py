@@ -6,9 +6,11 @@ from dataclasses import asdict
 import numpy as np
 import pandas as pd
 
-from src.simulator import PLANS, RANGE, RULES, Scenario, simulate
+from src.simulator import PLANS, RULES, Scenario, simulate
+from src.simulator import RANGE as SIM_RANGE
 
 # fmt: off
+RANGE = {**SIM_RANGE, "grid_factor": (0.30, 0.47)}  # 불확실성 분석의 계수 범위는 현재~근미래 좁은 구간(시뮬레이터 허용 범위는 미래·과거 시나리오용으로 더 넓음)
 METRICS = {"add_twh": ("power", "add_twh"), "add_tco2": ("carbon", "add_tco2"), "net_tco2": ("carbon", "net_tco2"), "total_eok": ("cost", "total_eok")}
 PLAN_CHOICES = [p for p in PLANS if p[0] in "BC"]  # 대규모 수전(154kV 이상)에 해당하는 요금제만 불확실성 후보로 본다
 CATEGORICAL = {"band_rule": list(RULES), "plan": PLAN_CHOICES}
@@ -38,6 +40,8 @@ def tornado(base=None, drop=("eaf_mt",)):
 def monte_carlo(n=10000, seed=0, fixed=None, dist="uniform"):
     """monte_carlo = 몬테카를로. 변수를 허용 범위 안에서 n번 무작위로 뽑아 시뮬레이션. dist='uniform'은 범위 균등, 'tri'는 기본값을 최빈값으로 둔 삼각분포(기본값 쪽이 더 그럴듯하다는 가정).
     fixed={'변수': 값}으로 일부 고정. (입력 표본, 결과 표)를 돌려준다. 변수끼리는 독립이라고 가정한다."""
+    if dist not in ("uniform", "tri"):
+        raise ValueError(f"dist={dist!r}: 'uniform' 또는 'tri'")
     rng, fixed, d0 = np.random.default_rng(seed), fixed or {}, asdict(Scenario())
 
     def draw(k, lo, hi):

@@ -40,7 +40,7 @@ for cut in (0.0, 0.15, 0.30):
             print("  요금 기여도(%):", rank_corr(X, Y, "total_eok").round(1).head(4).to_dict())
 
 # 2-2. 수소환원(S4, 포항 실증 30만 t) 기준: 전기로·자체 발전 감소 없이 수소환원 변수만 흔든다
-b4, t4 = tornado(Scenario(eaf_mt=0, h2_mt=0.3), drop=("eaf_mt", "h2_mt", "eaf_kwh_t", "eaf_util", "selfgen_cut", "bf_replace", "bf_tco2_t"))
+b4, t4 = tornado(Scenario(eaf_mt=0, h2_mt=0.3), drop=("eaf_mt", "h2_mt", "eaf_kwh_t", "eaf_util", "selfgen_cut", "bf_replace", "bf_tco2_t", "eaf_direct_t"))
 sw = (t4.net_tco2_hi - t4.net_tco2_lo).abs().sort_values(ascending=False)
 print(f"\n[토네이도 S4] 기준 순 저감 {-b4['net_tco2']/1e4:.1f}만 t, 변동폭(만 t) 큰 순:", {k: round(v / 1e4, 1) for k, v in sw.head(5).items()})
 for g in (0.0, 0.5, 1.0):  # 무탄소 전력 비율은 불확실성이 아니라 정책 선택이라 시나리오 축으로 나눈다
