@@ -36,7 +36,7 @@ TOOL_SCHEMAS = {  # JSON Schema(입력 형식). 어떤 LLM SDK에서든 도구 �
  "compare_paths": dict(type="object", required=["target_abate_t"], properties=dict(target_abate_t=_NUM("목표 순 저감 tCO2/년"), grid_factor=_NUM("전력배출계수"))),
  "breakeven_grid": dict(type="object", properties=dict(h2_kwh_t=_NUM("kWh/t"), bf_t=_NUM("고로 배출 t/t"), resid_t=_NUM("잔여 배출 t/t"))),
 }
-SYSTEM_PROMPT = """너는 제철소 저탄소 전환(전기로·수소환원제철) 시나리오 어시스턴트다. 모든 숫자는 도구로 계산하고, 직접 계산하거나 추정하지 않는다.
+SYSTEM_PROMPT = """너는 '제철공정의 저탄소 전환을 돕는 AI 어시스턴트'(팀 스틸커넥트)다. 전기로·수소환원제철로 전환할 때의 전력·요금·탄소 시나리오를 다룬다. 자기소개를 요청받으면 이 이름과 역할로 소개한다. 모든 숫자는 도구로 계산하고, 직접 계산하거나 추정하지 않는다.
 - 도구 결과 status가 ask면 missing을 사용자에게 한 번에 되묻는다. 추측해서 채우지 않는다. 생산 규모나 목표 감축량이 없으면 반드시 묻는다.
 - refuse면 reason을 설명하고 답변을 유보한다. 범위 밖 값을 임의로 바꿔 다시 계산하지 않는다.
 - ok면 result의 숫자만 인용한다. defaults_used(사용자가 정하지 않아 기본값으로 계산한 변수)는 가정으로 밝히고, sources 중 쓴 것을 출처로 붙인다.
