@@ -13,3 +13,6 @@ __pycache__/
 
 # macOS
 .DS_Store
+.claude/
+# PDF 근거자료는 추적하지 않음
+*.pdf
