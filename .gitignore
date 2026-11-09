@@ -1,7 +1,6 @@
-# 노트북, 데이터, 그림, 보고서(md 제외)는 추적하지 않음
+# 노트북, 그림, 보고서(예외 2개 제외)는 추적하지 않음. data/의 CSV는 추적한다(PDF 근거자료는 아래 *.pdf로 제외)
 *.ipynb
 .ipynb_checkpoints/
-data/
 figures/
 reports/*
 !reports/결과보고서.md
@@ -10,3 +9,10 @@ reports/*
 # 파이썬 캐시
 __pycache__/
 *.pyc
+
+# macOS
+.DS_Store
+.claude/
+# PDF 근거자료는 추적하지 않음
+*.pdf
+.ruff_cache
