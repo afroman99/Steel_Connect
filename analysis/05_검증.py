@@ -92,6 +92,14 @@ assert near(pick("봄가을", "휴일", 12), 0.5 * (110.9 + 5.1)), "봄가을 �
 assert near(pick("봄가을", "토", 12), 0.5 * 133.4), "봄가을 토요일 11~14시: 중간부하 단가의 50%"
 assert near(pick("봄가을", "휴일", 14), 116.0) and near(pick("여름", "휴일", 12), 116.0 - 5.1 + 5.1) and near(pick("봄가을", "평일", 12), 133.4), "할인은 봄가을 주말·공휴일 11~14시에만"
 assert near(price(u, ub, True, "A2", weekend=False)[(u.sea == "봄가을") & (u.day == "휴일") & (u.h == 12)].iloc[0], 116.0), "weekend=False면 할인 없음"
+from src.target import sweep_green
+sw = sweep_green(0.5, 50e4, "green_supply_twh", [0, 0.5, 1.0])
+assert [near(r["gap_twh"], min_green(0.5, 50e4, green_supply_twh=v)["gap_twh"]) for r, v in zip(sw, (0, 0.5, 1.0))] == [True] * 3 and sw[-1]["met"] and "연간" in sw[0]["note"], "sweep이 min_green과 일치, 한계 note 포함"
+assert [r["green_share"] for r in sweep_green(0.5, 50e4, "h2_kwh_t", [3000, 4000])][0] < sweep_green(0.5, 50e4, "h2_kwh_t", [3000, 4000])[1]["green_share"], "전력 원단위가 클수록 필요 무탄소 비율이 큼"
+for bad in (lambda: sweep_green(0.5, 50e4, "plan", [1]), lambda: sweep_green(0.5, 50e4, "h2_kwh_t", []), lambda: sweep_green(0.5, 50e4, "h2_kwh_t", [99999])):
+    try: bad(); raise AssertionError("거절돼야 함")
+    except ValueError: pass
+assert call_tool("sweep_green", {"h2_output_mt": 0.5, "target_abate_t": 50e4, "vary": "green_supply_twh", "values": [0, 0.5]})["status"] == "ok" and call_tool("sweep_green", {"vary": "x"})["status"] == "ask", "도구 래퍼 sweep"
 print("[내부 정합성] 통과")
 
 # 2. 외부 수치 대조 (일치 여부와 차이를 그대로 보고)

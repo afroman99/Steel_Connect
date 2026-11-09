@@ -6,19 +6,20 @@ call_tool(이름, 인자 dict) -> {"status": "ok"|"ask"|"refuse", ...}. 어시�
 from dataclasses import fields
 
 from src.simulator import SOURCES, Scenario, breakeven_grid, simulate
-from src.target import compare_paths, min_green, required_output
+from src.target import compare_paths, min_green, required_output, sweep_green
 
 # fmt: off
 VARS = [f.name for f in fields(Scenario)]
-REQUIRED = {"simulate": ["eaf_mt 또는 h2_mt"], "required_output": ["target_abate_t", "path"], "min_green": ["h2_output_mt", "target_abate_t"], "compare_paths": ["target_abate_t"], "breakeven_grid": []}
+REQUIRED = {"simulate": ["eaf_mt 또는 h2_mt"], "required_output": ["target_abate_t", "path"], "min_green": ["h2_output_mt", "target_abate_t"], "sweep_green": ["h2_output_mt", "target_abate_t", "vary", "values"], "compare_paths": ["target_abate_t"], "breakeven_grid": []}
 TOOLS = {  # LLM 도구 정의용 설명. 변수 의미·단위·허용 범위는 reports/시나리오_변수표.md
  "simulate": "시나리오 계산: 추가 전력(TWh)·탄소(tCO2)·요금(억 원). 인자는 Scenario 변수(eaf_mt, h2_mt, eaf_util, grid_factor, plan, ets_price 등).",
  "required_output": "목표 순 저감(target_abate_t, tCO2/년)을 달성하는 필요 생산량·전력·요금. path는 'eaf' 또는 'h2'(h2_green 등 추가 가능).",
  "min_green": "수소환원 생산량(h2_output_mt)으로 목표 순 저감을 달성하는 최소 무탄소 비율·전력량·부족분(green_supply_twh는 사용자 가정).",
+ "sweep_green": "min_green을 한 조건만 바꿔가며 반복(vary: green_supply_twh, h2_kwh_t, grid_factor, h2_resid_t, target_abate_t, h2_output_mt 중 하나, values: 값 목록). 확보량·효율 조건 비교용.",
  "compare_paths": "같은 목표 순 저감을 전기로·수소환원(전력망·무탄소 50%·100%)으로 달성할 때 비교.",
  "breakeven_grid": "수소환원이 고로보다 배출을 늘리기 시작하는 전력배출계수. 인자: h2_kwh_t, bf_t, resid_t.",
 }
-FUNCS = {"simulate": simulate, "required_output": required_output, "min_green": min_green, "compare_paths": compare_paths, "breakeven_grid": breakeven_grid}
+FUNCS = {"simulate": simulate, "required_output": required_output, "min_green": min_green, "sweep_green": sweep_green, "compare_paths": compare_paths, "breakeven_grid": breakeven_grid}
 
 
 def call_tool(name, args=None):

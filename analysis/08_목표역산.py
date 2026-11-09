@@ -17,3 +17,13 @@ for supply in (0.0, 0.5):
     r = min_green(0.5, 50e4, green_supply_twh=supply)
     print(f"[수소환원 50만 t/년, 순 저감 50만 t 목표, 무탄소 확보 {supply} TWh] 전력 {r['power_twh']:.2f} TWh 중 무탄소 {r['green_share']:.0%}({r['green_twh']:.2f} TWh) 필요, 부족 {r['gap_twh']:.2f} TWh")
 print(f"[불가능 사례] 수소환원 50만 t/년, 목표 150만 t: {min_green(0.5, 150e4)}")
+
+# 4. 대안 검토: 한 조건만 바꿔가며 다시 비교 (연간 전력량 기준, 시간대별 공급·저장 미반영)
+from src.target import sweep_green
+print("\n[확보 가능한 무탄소 전력량을 바꿔 가면] 수소환원 50만 t/년, 목표 순 저감 50만 t")
+for r in sweep_green(0.5, 50e4, "green_supply_twh", [0, 0.25, 0.5, 0.75]): print(f"  확보 {r['green_supply_twh']:.2f} TWh -> 부족 {r['gap_twh']:.2f} TWh ({'충족' if r['met'] else '부족'})")
+print("[수소환원 전력 원단위를 바꿔 가면] 필요 무탄소 비율")
+for r in sweep_green(0.5, 50e4, "h2_kwh_t", [2700, 3480, 3720, 4000]): print(f"  {r['h2_kwh_t']} kWh/t -> {r['green_share']:.0%} (전력 {r['power_twh']:.2f} TWh, 무탄소 {r['green_twh']:.2f} TWh)")
+print("[전력배출계수를 바꿔 가면] 필요 무탄소 비율")
+for r in sweep_green(0.5, 50e4, "grid_factor", [0.30, 0.4173, 0.50]): print(f"  {r['grid_factor']} -> {r['green_share']:.0%}")
+print(f"  ※ {r['note']}")
