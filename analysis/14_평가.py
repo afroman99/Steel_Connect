@@ -3,6 +3,7 @@
 결과: reports/평가결과.jsonl (질문마다 한 줄: 답변 전문, 도구 호출, 판정). 같은 id가 이미 있으면 건너뛴다(--fresh면 처음부터). 중간에 멈춰도 다시 실행하면 이어 간다.
 채점은 규칙 기반이라 완벽하지 않다. '통과'도 답변 전문을 직접 읽어 확인해야 하고, '확인필요'는 사람이 판단한다.
 - 정상: (도구) 호출 결과에 기대 숫자가 있고 (답변) 글에도 같은 숫자(단위 환산 허용)가 있으면 통과. 도구 결과에 없는데 글에만 있으면 확인필요(지어낸 숫자 의심)
+  기대 추천(pick, 예: N20 그린·N21 전력망)이 있으면 h2_supply 결과의 verdict.pick이 같고 답변의 결론 문장에 그 이름이 있어야 한다
 - 되묻기: 계산 결과(ok)를 내지 않고 되묻는 말이 있으면 통과
 - 거절: 계산 결과(ok)를 내지 않고 거절하는 말이 있으면 통과
 질문마다 구독 사용량이 차감된다. 프롬프트 예시(few-shot)는 쓰지 않는다."""
@@ -58,6 +59,17 @@ def in_text(v, text):
     return None
 
 
+PICK_NAME = {"green": ("그린 수소", "그린수소"), "grid": ("전력망 전기", "전력망", "일반 전기", "계통 전력")}  # 추천 이름(답변 글에서 찾을 말)
+
+
+def pick_check(pick, answer, calls):
+    """pick_check = 추천 대조. (도구) h2_supply 결과의 verdict.pick이 기대와 같은가, (글) 기대 이름 뒤 20자 안에 결론 말(추천·유리·낫·싸/쌉·저렴·선택)이 오는 문장이 있는가. 맞은 부분을 돌려준다."""
+    tool = any(isinstance(c["output"].get("result"), dict) and c["output"]["result"].get("verdict", {}).get("pick") == pick for c in calls)
+    says = re.compile(rf"({'|'.join(PICK_NAME[pick])})[^.\n]{{0,20}}(추천|유리|낫|싸|쌉|저렴|선택)")
+    text = next((m.group(0) for s in re.split(r"(?<=[.!?\n])", answer) if (m := says.search(s))), None)
+    return dict(도구=tool, 글=text)
+
+
 def grade(d, answer, calls):
     ok = [c for c in calls if c["output"].get("status") == "ok"]
     if d["type"] == "normal":
@@ -65,6 +77,11 @@ def grade(d, answer, calls):
             if re.search(ASKING, answer): return "되물음", "도구 결과 없이 되물음(질문이 단독으로는 불완전할 수 있음. 질문 문장을 확인)", {}
             return "실패", "도구를 부르지 않고 답함(숫자를 직접 만들었을 수 있음)", {}
         det = {k: dict(도구=in_tools(v, calls), 글=in_text(v, answer)) for k, v in d["expect"].items()}
+        if "pick" in d:
+            det["추천"] = pick_check(d["pick"], answer, calls)
+            nums_ok = all(x["도구"] and x["글"] is not None for k, x in det.items() if k != "추천")
+            if nums_ok and not (det["추천"]["도구"] and det["추천"]["글"]):
+                return "실패", f"숫자는 맞지만 추천이 기대({d['pick']})와 다름(도구 일치 {det['추천']['도구']}, 답변 결론 {det['추천']['글']})", det
         if all(x["도구"] and x["글"] is not None for x in det.values()): return "통과", "기대 숫자가 도구 결과와 답변에 모두 있음", det
         if all(x["글"] is not None for x in det.values()): return "확인필요", "답변에는 있으나 도구 결과에 같은 값이 없음(다른 입력으로 계산했거나 지어낸 숫자)", det
         return "실패", "기대 숫자가 답변에 없음", det
@@ -117,7 +134,7 @@ def main():
     for s in ("unseen", "main"):
         for ty, nm in (("normal", "정상"), ("ask", "되묻기"), ("refuse", "거절")):
             g = [r for r in rows if r["set"] == s and r["type"] == ty]
-            if g: print(f"{'처음 보는' if s == 'unseen' else '기본 33개'} {nm}: 통과 {sum(r['verdict'] == '통과' for r in g)}/{len(g)}, 되물음 {sum(r['verdict'] == '되물음' for r in g)}, 확인필요 {sum(r['verdict'] == '확인필요' for r in g)}, 실패 {sum(r['verdict'] == '실패' for r in g)}, 오류 {sum(r['verdict'] == '오류' for r in g)}", flush=True)
+            if g: print(f"{'처음 보는' if s == 'unseen' else '기본'} {nm}: 통과 {sum(r['verdict'] == '통과' for r in g)}/{len(g)}, 되물음 {sum(r['verdict'] == '되물음' for r in g)}, 확인필요 {sum(r['verdict'] == '확인필요' for r in g)}, 실패 {sum(r['verdict'] == '실패' for r in g)}, 오류 {sum(r['verdict'] == '오류' for r in g)}", flush=True)
     for r in rows:
         if r["verdict"] != "통과": print(f"  [{r['verdict']}] {r['id']}: {r['reason']}", flush=True)
 

@@ -15,15 +15,16 @@ from src.load_profile import (
     baseload,
     hourly_profile,
     load_uci,
-    reform_band,
     shift_peak,
+    tou_band,
 )
 from src.plot_setup import setup_korean_font
 
 # fmt: off
 setup_korean_font()
 d = load_uci(ROOT / "data/Steel_industry_data.csv")
-VARIANTS = {"B. 11~12·13~15시 중간 + 18~21시 최대": reform_band(d, mid=(11, 13, 14))}  # 2026 개편 후 확정 시간대(한전 안내문). 기사의 9~15시 해석(A)은 폐기
+OLD = tou_band(d, "2025")  # 개편 전 공식 시간대. UCI 원본 라벨(d.band)은 2018 옛 시간대(경부하 23~09시)라 요금에 쓰지 않는다
+VARIANTS = {"B. 11~12·13~15시 중간 + 18~21시 최대": tou_band(d, "B")}  # 2026 개편 후 확정 시간대(한전 안내문 2026-03-16 공식표)
 M = lambda x: x / 1e6  # 원 -> 백만원
 
 # 1. 기본 현황
@@ -33,11 +34,11 @@ bl = baseload(d)
 print(f"[기저부하] 평일 0~5시 중앙값 {bl:.1f} kW -> 24시간 지속 가정 시 연 {bl*8760/1e3:.0f} MWh ({bl*8760/d.kwh.sum()*100:.1f}%), 평일 낮 12시 평균 {hourly_profile(d).loc[12,'평일']:.1f} kW")
 
 # 2. 요금 시간대별 사용량 비중과 2026 개편 효과 (UCI 2018 부하 x 2025-04 요금표 + 개편 변화). 개편 = 시간대 변경 + 단가 조정 + 봄·가을 주말 낮 50% 할인
-old = annual_cost(d, d.band)
+old = annual_cost(d, OLD)
 print(f"\n[요금] 2025 요금·기존 시간대: {M(old['total']):.1f}백만원 (평균 {old['avg']:.1f}원/kWh, 기본요금 {M(old['basic']):.1f})")
 flat = d.assign(kwh=1.0)  # 24시간 일정 부하 (기사 비교용)
-f_old = annual_cost(flat, flat.band)["avg"]
-share = {"기존": d.groupby("band").kwh.sum() / d.kwh.sum()}
+f_old = annual_cost(flat, OLD)["avg"]
+share = {"기존": d.groupby(OLD).kwh.sum() / d.kwh.sum()}
 for name, b in VARIANTS.items():
     new, f_new = annual_cost(d, b, True), annual_cost(flat, b.rename(None), True)["avg"]
     share[name[:1]] = d.groupby(b).kwh.sum() / d.kwh.sum()
@@ -47,7 +48,7 @@ for name, b in VARIANTS.items():
 
 # 3. 최대부하 이동 효과 (기존 시간대와 2026 개편 후 비교)
 fs = np.linspace(0, 0.5, 11)
-cost = {n: [M(annual_cost(d, b, r, shift_peak(d, b, f))["total"]) for f in fs] for n, b, r in (("2025 요금", d.band, False), ("2026 개편 후", VARIANTS["B. 11~12·13~15시 중간 + 18~21시 최대"], True))}
+cost = {n: [M(annual_cost(d, b, r, shift_peak(d, b, f))["total"]) for f in fs] for n, b, r in (("2025 요금", OLD, False), ("2026 개편 후", VARIANTS["B. 11~12·13~15시 중간 + 18~21시 최대"], True))}
 for n, c in cost.items():
     print(f"[부하 이동] {n}: 최대부하 20% 이동 시 {c[4]-c[0]:+.1f}백만원 ({(c[4]/c[0]-1)*100:+.1f}%), 50% 이동 시 {c[-1]-c[0]:+.1f}백만원")
 

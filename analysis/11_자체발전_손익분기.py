@@ -1,13 +1,18 @@
-"""자체발전 감소(selfgen_cut) 스윕과 손익분기 배출권 가격. 실행: 프로젝트 루트에서 python3 analysis/11_자체발전_손익분기.py
+"""자체발전 감소(selfgen_cut) 스윕과 손익분기 배출권 가격. 실행: 프로젝트 루트에서 python3 analysis/11_자체발전_손익분기.py (그림은 figures/11_자체발전_손익분기.png)
 손익분기 ets_price = 전력비용 ÷ 순 저감 (원/tCO2). 이 값보다 배출권이 비싸면 전력비용을 배출권 가치가 넘는다는 뜻이다.
 한계: 전력비용만 비교(설비 투자비·고로 원료비 절감 미반영), 배출권 가치는 실제 구매 회피액이 아닌 참고 가치."""
 
 import sys
 from pathlib import Path
 
+import matplotlib.pyplot as plt
+import numpy as np
 import pandas as pd
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT))
+from src.hydrogen import EUA_KRW, KAU_NOW
+from src.plot_setup import setup_korean_font
 from src.sensitivity import sweep_selfgen
 from src.simulator import ETS_RANGE, SELF_SHARE, TOTAL_TWH, simulate
 
@@ -17,9 +22,24 @@ CASES = {"S1 전기로(전력망)": dict(), "S4 수소환원(전력망)": dict(e
 print(f"자체발전 = 총 {TOTAL_TWH} TWh x {SELF_SHARE:.1%} = {TOTAL_TWH*SELF_SHARE:.1f} TWh (ESG 페이지: 2024 제철소 사용 전력의 85.5% 자체 생산)")
 for name, kw in CASES.items():
     df = sweep_selfgen(CUTS, **kw)
-    df["배출권범위대비"] = df["breakeven_ets"].map(lambda v: "순저감 없음" if pd.isna(v) else "1만원 미만" if v < ETS_RANGE[0] else "범위 안" if v <= ETS_RANGE[1] else "3만원 초과")
+    df["배출권범위대비"] = df["breakeven_ets"].map(lambda v: "순저감 없음" if pd.isna(v) else f"{ETS_RANGE[0]:,}원 미만" if v < ETS_RANGE[0] else "범위 안" if v <= ETS_RANGE[1] else f"{ETS_RANGE[1]:,}원 초과")
     print(f"\n[{name}]"); print(df.round(2).to_string())
 print(f"\n※ 배출권 허용 범위 {ETS_RANGE[0]:,}~{ETS_RANGE[1]:,}원/t. 손익분기가 이보다 높으면 배출권 수익만으로는 전력비용을 못 덮는다.")
+
+# 그림: 자체발전 감소율별 순 저감과 손익분기 배출권 가격
+setup_korean_font()
+fine = list(np.round(np.arange(0, 0.301, 0.01), 2))
+sweeps = {name: sweep_selfgen(fine, **kw) for name, kw in CASES.items()}
+fig, ax = plt.subplots(1, 2, figsize=(14, 4.8))
+for (name, df), c in zip(sweeps.items(), ("#1565c0", "#9e9e9e", "#2e7d32")):
+    ax[0].plot(df.index * 100, df.abate_mt * 100, marker="o", ms=3, c=c, label=name)
+    ax[1].plot(df.index * 100, df.breakeven_ets / 1e4, marker="o", ms=3, c=c, label=name)
+ax[0].axhline(0, c="black"); ax[0].set(title="자체발전이 줄면 순 저감도 준다", xlabel="자체발전 감소율 (%)", ylabel="순 저감 (만 tCO2/년)"); ax[0].legend()
+ax[1].set_yscale("log"); ax[1].axhline(KAU_NOW / 1e4, ls="--", c="gray"); ax[1].text(0.3, KAU_NOW / 1e4 * 1.1, "K-ETS 2.95만", color="gray")
+ax[1].axhline(EUA_KRW / 1e4, ls=":", c="gray"); ax[1].text(0.3, EUA_KRW / 1e4 * 1.1, "EU ETS 13.2만", color="gray")
+ax[1].set(title="손익분기 배출권 가격 = 전력비용 / 순 저감 (순 저감 0 이하는 선이 끊김)", xlabel="자체발전 감소율 (%)", ylabel="만 원/tCO2 (로그)"); ax[1].legend()
+fig.savefig(ROOT / "figures/11_자체발전_손익분기.png", dpi=150, bbox_inches="tight")
+print("그림 저장: figures/11_자체발전_손익분기.png")
 
 # 참고 기준점: 고로 생산 1 t이 줄 때 자체발전도 같은 비율로 준다고 가정 (조강 약 35 Mt, 부생가스 발전이 고로 생산에 비례한다는 단순 가정. 비례 가정은 근거 약함)
 print("\n[참고 기준점: 대체 생산량 ÷ 조강 35 Mt 만큼 자체발전 감소]")

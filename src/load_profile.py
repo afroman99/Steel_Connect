@@ -1,9 +1,10 @@
-"""UCI 부하 데이터 분석 함수: 로딩, 요금 시간대, 요금 계산, 2026 개편·부하 이동 효과. 요금표는 simulator.py 것을 씀."""
+"""UCI 부하 데이터 분석 함수: 로딩, 요금 시간대, 요금 계산, 2026 개편·부하 이동 효과. 요금표·시간표는 simulator.py 것을 씀.
+주의: UCI 원본 Load_Type(band 열)은 2018년 옛 시간대(경부하 23~09시)라 요금 계산에 쓰지 않는다. 요금 시간대는 tou_band(한전 공식표)로 붙이고, UCI에서는 부하·계절·요일(평일/토/휴일) 구성만 쓴다."""
 
 import numpy as np
 import pandas as pd
 
-from src.simulator import PLANS, REFORM
+from src.simulator import PLANS, REFORM, RULES
 
 # fmt: off
 IDX = {"경": 0, "중": 1, "최": 2}  # 경부하·중간부하·최대부하 -> 요금표 열 번호
@@ -33,11 +34,12 @@ def baseload(d, hours=range(0, 6)):
     return d[(d.day == "평일") & d.h.isin(hours)].kw.median()
 
 
-def reform_band(d, mid=(11, 13, 14), peak=range(18, 21)):
-    """reform_band = 개편 후 요금시간대. 휴일이 아닌 날 mid 시각은 중간부하, peak 시각은 최대부하로 바꾼 band를 돌려준다. 기본값은 2026 개편 확정(11~12·13~15시 중간, 18~21시 최대)."""
-    b, work = d.band.copy(), d.day != "휴일"
-    b[work & d.h.isin(mid)] = "중"
-    b[work & d.h.isin(peak)] = "최"
+def tou_band(d, rule="B"):
+    """tou_band = 공식 요금시간대. 행마다 (계절, 시각)을 한전 시간표 RULES[rule]('2025' 개편 전, 'B' 2026 개편 후)로 바꾼 band. 토요일 최대부하는 중간부하, 일·공휴일(휴일)은 종일 경부하."""
+    table = RULES[rule]
+    b = pd.Series([table[s][h] for s, h in zip(d.sea, d.h)], index=d.index)
+    b[(d.day == "토") & (b == "최")] = "중"
+    b[d.day == "휴일"] = "경"
     return b
 
 
@@ -53,10 +55,10 @@ def price(d, band, reform=False, plan="A2", weekend=True):
 
 
 def annual_cost(d, band, reform=False, kwh=None, plan="A2", weekend=True):
-    """annual_cost = 연간 요금. 전력량요금 + 기본요금(최대수요 kW x 기본요금 단가 x 12). 한 해 자료의 연 최대를 12개월 모두에 적용(정상상태 가정, 실제는 직전 12개월 최대).
-    kwh를 주면 그 사용량으로 계산(부하 이동 후 등). 기후환경·연료비조정요금·기금은 포함하지 않음."""
+    """annual_cost = 연간 요금. 전력량요금 + 기본요금(요금적용전력 kW x 기본요금 단가 x 12). 요금적용전력은 중간·최대부하 시간의 최대수요(경부하 피크 제외, 한전 약관).
+    한 해 자료의 연 최대를 12개월 모두에 적용(정상상태 가정, 실제는 직전 12개월 최대). kwh를 주면 그 사용량으로 계산(부하 이동 후 등). 기후환경·연료비조정요금·기금은 포함하지 않음."""
     kwh = d.kwh if kwh is None else kwh
-    energy, basic = (kwh * price(d, band, reform, plan, weekend)).sum(), kwh.max() * 4 * PLANS[plan][0] * 12
+    energy, basic = (kwh * price(d, band, reform, plan, weekend)).sum(), kwh[band != "경"].max() * 4 * PLANS[plan][0] * 12
     return dict(energy=energy, basic=basic, total=energy + basic, avg=(energy + basic) / kwh.sum())
 
 

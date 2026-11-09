@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import { Moon, Send, Sun } from "lucide-react"
 import { useTheme } from "next-themes"
 import { Markdown } from "@/components/app/Markdown"
+import { QuickCalc } from "@/components/app/QuickCalc"
 import { ResultPanel } from "@/components/app/ResultPanel"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -15,6 +16,7 @@ import { isResult, type Call, type Hit, type Info, type Out, type ToolName } fro
 type Msg = { id: number; role: "user" | "ai"; text?: string; wait?: boolean; err?: boolean; calls?: Call[]; hit?: Hit; note?: string }
 
 const EXAMPLES = [
+  "수소환원 100만 t의 수소를 그린 수소로 만들지 전력망 전기로 만들지, 어떤 상황에서 무엇이 나아?",
   "광양 전기로 250만 t을 가동률 70%로 돌리면 추가로 필요한 전력은?",
   "수소환원 50만 t/년으로 순 저감 50만 t을 하려면 무탄소 전력이 몇 %나 필요해?",
   "무탄소 전력을 0.3 TWh만 확보했는데, 부족분을 메우려면 무엇을 바꿔야 해?",
@@ -147,11 +149,12 @@ export default function App() {
               <ResultPanel key={result.id} hit={result.hit} info={info} onClose={() => setResult(null)} />
             </section>
           )}
+          {!chatting && llm === null && <QuickCalc info={info} onOpen={open} />}
           <form onSubmit={(e) => { e.preventDefault(); submit() }} className="space-y-3">
             <label htmlFor="q" className="sr-only">질문</label>
             <div className="flex gap-2">
               <Input id="q" value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && e.nativeEvent.isComposing) e.preventDefault() }} maxLength={500}
-                placeholder={chatting ? "이어서 물어보세요. 예: 확보 가능한 무탄소 전력이 0.3 TWh면?" : EXAMPLES[1]} autoComplete="off" />
+                placeholder={chatting ? "이어서 물어보세요. 예: 확보 가능한 무탄소 전력이 0.3 TWh면?" : EXAMPLES[2]} autoComplete="off" />
               <Button type="submit" className="bg-brand text-white hover:bg-[color-mix(in_oklch,var(--brand),white_15%)] disabled:opacity-100" disabled={busy || !q.trim()}><Send aria-hidden strokeWidth={2} />질문하기</Button>
             </div>
             <p className="text-sm text-muted-foreground">답은 몇 초에서 십수 초 걸립니다.</p>
@@ -161,6 +164,7 @@ export default function App() {
               {EXAMPLES.map((t) => <li key={t}><Button variant="outline" size="sm" className="h-auto whitespace-normal py-2 text-left" onClick={() => setQ(t)}>{t}</Button></li>)}
             </ul>
           )}
+          {!chatting && llm !== null && <QuickCalc info={info} onOpen={open} />}
         </section>
       </main>
 

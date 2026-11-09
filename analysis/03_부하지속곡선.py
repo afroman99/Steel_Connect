@@ -10,12 +10,13 @@ import pandas as pd
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
-from src.load_profile import annual_cost, load_duration, load_uci, peak_shave
+from src.load_profile import annual_cost, load_duration, load_uci, peak_shave, tou_band
 from src.plot_setup import setup_korean_font
 
 # fmt: off
 setup_korean_font()
 d = load_uci(ROOT / "data/Steel_industry_data.csv")
+band = tou_band(d, "B")  # 2026 개편 후 공식 시간대. 요금적용전력은 중간·최대부하 시간의 최대수요(경부하 피크 제외)
 M = lambda x: x / 1e6
 x, kw = load_duration(d)
 
@@ -26,10 +27,10 @@ for p in (0.5, 1, 5, 10):
 print("[월별 최대수요 kW]", d.groupby(d.t.dt.month).kw.max().round(0).astype(int).to_dict())
 
 # 2. 상한(cap)을 낮추면: 기본요금 절감 vs 잘라야 하는 에너지
-base = annual_cost(d, d.band)
+base = annual_cost(d, band, True)
 caps = range(620, 299, -20)
-res = pd.DataFrame([peak_shave(d, c, d.band) for c in caps]).set_index("cap")
-print(f"\n[peak shaving] 2025 요금 기준선 {M(base['total']):.1f}백만원 (기본요금 {M(base['basic']):.1f})")
+res = pd.DataFrame([peak_shave(d, c, band, True) for c in caps]).set_index("cap")
+print(f"\n[peak shaving] 2026 개편 후 요금 기준선 {M(base['total']):.1f}백만원 (기본요금 {M(base['basic']):.1f})")
 print((res.assign(cut_kwh=res.cut_kwh.round(0), cut_pct=res.cut_pct.round(2), basic_save=(res.basic_save/1e6).round(2), energy_save_upper=(res.energy_save_upper/1e6).round(2))).loc[[600, 560, 500, 460, 400, 340]].to_string())
 r = res.loc[500]; print(f"  -> 상한 500 kW: 기본요금 {M(r.basic_save):.1f}백만원 절감(기본요금의 {r.basic_save/base['basic']*100:.0f}%), 잘라낼 에너지는 연 사용량의 {r.cut_pct:.2f}%, {r.hours}시간")
 
