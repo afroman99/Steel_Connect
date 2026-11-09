@@ -6,14 +6,14 @@ from dataclasses import asdict
 import numpy as np
 import pandas as pd
 
-from src.simulator import PLANS, RULES, Scenario, simulate
+from src.simulator import PLANS, Scenario, simulate
 from src.simulator import RANGE as SIM_RANGE
 
 # fmt: off
 RANGE = {**SIM_RANGE, "grid_factor": (0.30, 0.47)}  # 불확실성 분석의 계수 범위는 현재~근미래 좁은 구간(시뮬레이터 허용 범위는 미래·과거 시나리오용으로 더 넓음)
 METRICS = {"add_twh": ("power", "add_twh"), "add_tco2": ("carbon", "add_tco2"), "net_tco2": ("carbon", "net_tco2"), "total_eok": ("cost", "total_eok")}
 PLAN_CHOICES = [p for p in PLANS if p[0] in "BC"]  # 대규모 수전(154kV 이상)에 해당하는 요금제만 불확실성 후보로 본다
-CATEGORICAL = {"band_rule": list(RULES), "plan": PLAN_CHOICES}
+CATEGORICAL = {"plan": PLAN_CHOICES}  # 시간대 규칙은 개편 확정으로 불확실성이 아니므로 제외
 
 
 def run(**kw):

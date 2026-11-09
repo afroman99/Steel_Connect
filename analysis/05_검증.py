@@ -41,12 +41,14 @@ for k, v in (("plan", "Z9"), ("band_rule", "C")):
     assert rejects(**{k: v}), f"{k}={v} 거절돼야 함"
 assert S(eaf_util=0.3)["power"]["add_twh"] < S()["power"]["add_twh"] < S(eaf_util=1)["power"]["add_twh"], "단조성"
 # 수소환원(S4) 정합성
-s4, s4g, s5, s1 = (S(**{k: v for k, v in vars(SCENARIOS[n]).items()}) for n in ("S4", "S4G", "S5", "S1"))
+s4, s4g, s5, s1, s1o = (S(**{k: v for k, v in vars(SCENARIOS[n]).items()}) for n in ("S4", "S4G", "S5", "S1", "S1O"))
 assert near(s4["power"]["add_twh"], 0.3 * 0.7 * 3.72), "S4 전력 = 0.3Mt x 0.7 x 3.72 MWh/t = 0.7812 TWh"
 assert s4g["carbon"]["add_tco2"] == 0, "무탄소 100%면 Scope 2 증가 0"
 assert near(s4["carbon"]["scope1_cut_tco2"], 0.21e6 * 1.99), "S4 Scope 1 감축 = 21만 t x 1.99"
 assert near(s5["power"]["add_twh"], s1["power"]["add_twh"] + s4["power"]["add_twh"]) and near(s5["carbon"]["abate_tco2"], s1["carbon"]["abate_tco2"] + s4["carbon"]["abate_tco2"]), "S5 = S1 + S4 (전력·순 저감 덧셈)"
-assert near(s1["cost"]["total_eok"], 1413.80, 1e-4), "수소환원 추가가 기존 S1 결과를 바꾸지 않음(회귀)"
+assert near(s1o["cost"]["total_eok"], 1413.80, 1e-4), "개편 전(2025) S1 요금 회귀"
+assert near(s1["cost"]["total_eok"], 1409.39, 1e-4), "개편 후(B) S1 요금: 2025보다 낮아야 함"
+assert s1["cost"]["total_eok"] < s1o["cost"]["total_eok"], "개편 후가 더 싸다"
 assert abs(breakeven_grid(3720, 1.688) - 0.456) < 0.005, "Bhaskar 2020 논문의 손익분기 0.456 재현"
 assert near(S(eaf_mt=0, h2_mt=1, h2_util=1)["carbon"]["abate_tco2"], 1e6 * (1.99 - 3.72 * 0.4173)), "수소환원 1Mt 순 저감 = 1.99 - 3.72 x 0.4173 (t/t)"
 g = green_needed(0.4173)  # 필요 무탄소 비율로 수소환원을 돌리면 순 저감이 전기로(1 Mt)와 같아야 함
@@ -57,7 +59,7 @@ assert near(S(eaf_util=1, h2_mt=0)["carbon"]["abate_tco2"], 2.5e6 * (1.99 - 0.08
 assert near(S(eaf_util=1, eaf_basis="posco_net")["carbon"]["abate_tco2"], 2.5e6 * 1.4), "포스코 순감축 옵션: 순 저감 = 1.4 t/t (전력 배출 재차감 없음)"
 assert near(S(eaf_util=1, eaf_basis="posco_net", grid_factor=0.3)["carbon"]["abate_tco2"], 2.5e6 * 1.4), "posco_net은 계수와 무관"
 assert rejects(eaf_basis="typo"), "경계 옵션 오타 거절"
-assert near(S(fund=0.037)["cost"]["total_eok"], 1427.56, 1e-4), "기금 3.7%(2023 기준) 재현"
+assert near(S(fund=0.037, band_rule="2025")["cost"]["total_eok"], 1427.56, 1e-4), "기금 3.7%·개편 전 요금(2025) 재현"
 for bad in ({"eaf_mt": True}, {"eaf_mt": None}, {"plan": 3}, {"fund": 0.05}, {"grid_factor": float("nan")}):
     assert rejects(**bad), f"{bad} 거절돼야 함"
 assert not rejects(grid_factor=0.245) and not rejects(grid_factor=0.5404), "미래·2018 계수 허용"

@@ -26,7 +26,7 @@ PLANS = {
     "C3": (8090, {"여름": (120.0, 172.9, 253.8), "봄가을": (120.0, 142.9, 173.3), "겨울": (126.9, 172.5, 229.1)}),
 }
 REFORM = {"여름": (5.1, 0, -16.9), "봄가을": (5.1, 0, -13.2), "겨울": (5.1, 0, -16.9)}  # 2026 개편 단가 변화 (중간부하 미확인 = 0, 모든 요금제에 같은 변화 적용은 가정)
-RULES = {"2025": None, "A": {}, "B": {"mid": (11, 13, 14)}}  # 시간대 규칙: 2025 현행 / 개편 A(9~15시 중간) / 개편 B(11~12·13~15시 중간). 둘 다 18~21시 최대
+RULES = {"2025": None, "B": {"mid": (11, 13, 14)}}  # 시간대 규칙: 2025(개편 전, 비교용) / B(2026 개편 후 = 확정. 11~12·13~15시 중간, 18~21시 최대, 한전 안내문 2026-03-16). 기사의 "9~15시 통일" 해석(A)은 폐기
 DATA = Path(__file__).resolve().parent.parent / "data/Steel_industry_data.csv"
 FUNDS = (0.037, 0.032, 0.027)  # 전력산업기반기금 요율: 3.7%(한전 요금표 2023-05 원문) / 3.2%(2024-07~2025-06) / 2.7%(2025-07~, 정부 안내, 원문 재확인 필요). 부가가치세 10%는 사업자 환급 대상이라 제외(가정)
 ETS_RANGE = (10_000, 30_000)  # 배출권 가격 허용 범위 (원/tCO2). 시장 변동이 커서(1만 원대~3만 원 안팎 보도) 넓게 잡음, KRX 원문 미확인
@@ -36,7 +36,7 @@ RANGE = dict(eaf_mt=(0, 2.5), eaf_kwh_t=(300, 500), eaf_util=(0.3, 1), selfgen_c
              price_change=(-0.1, 0.2), load_factor=(0.6, 1), total_twh=(20, 26), adder=(4, 14), bf_replace=(0, 1), bf_tco2_t=(1.0, 2.1), eaf_direct_t=(0.04, 0.15),
              h2_mt=(0, 2.5), h2_util=(0.3, 1), h2_kwh_t=(2700, 4000), h2_green=(0, 1), h2_bf_t=(1.6, 2.1), h2_resid_t=(0, 0.4))  # 변수별 허용 범위
 LOW_CONF = ["scope2_기준선(0.4541 기반)과 증분(grid_factor) 계수 불일치", "plan(수전 전압·선택요금 미확인)", "eaf_kwh_t", "eaf_util", "selfgen_cut", "price_change", "load_factor",
-            "total_twh(역산, 2021년 3.8÷0.15=25와 2024년 3.05÷0.145=21 두 점)", "adder(기후환경 9원은 2023-01 기준, 연료비조정 ±5원)", "bf_tco2_t(포스코 평균 Scope 1 1.99, 고로 단독값 아님. BF 자체 Scope 2 약 0.04는 양쪽 경로 모두 제외)", "eaf_direct_t(전기로 직접 배출 0.08, 2차 출처 IPCC 2006·JRC 인용, 원문 미확인)", "bf_replace(대체 비율 가정)", "h2_mt(실증 30만t 보도, 상용 규모 근거 없음)", "h2_kwh_t(문헌 2.7~4.0, 포스코 실측 아님)", "h2_green(청정전력 조달 비율 가정)", "h2_bf_t(포스코 평균 Scope 1 원단위, 고로 단독값 아님)", "h2_resid_t(수소환원 잔여 배출, 논문은 0, IEA 근접 제로 0.4 이하)", "band_rule(개편 A/B 미확정)", "ets_price(사용자 가정, 시장 변동 큼, KRX 원문 미확인)"]
+            "total_twh(역산, 2021년 3.8÷0.15=25와 2024년 3.05÷0.145=21 두 점)", "adder(기후환경 9원은 2023-01 기준, 연료비조정 ±5원)", "bf_tco2_t(포스코 평균 Scope 1 1.99, 고로 단독값 아님. BF 자체 Scope 2 약 0.04는 양쪽 경로 모두 제외)", "eaf_direct_t(전기로 직접 배출 0.08, 2차 출처 IPCC 2006·JRC 인용, 원문 미확인)", "bf_replace(대체 비율 가정)", "h2_mt(실증 30만t 보도, 상용 규모 근거 없음)", "h2_kwh_t(문헌 2.7~4.0, 포스코 실측 아님)", "h2_green(청정전력 조달 비율 가정)", "h2_bf_t(포스코 평균 Scope 1 원단위, 고로 단독값 아님)", "h2_resid_t(수소환원 잔여 배출, 논문은 0, IEA 근접 제로 0.4 이하)", "요금 개편 중간부하 단가(안내문에 조정 항목으로 없음, 변화 없음으로 해석)", "ets_price(사용자 가정, 시장 변동 큼, KRX 원문 미확인)"]
 SOURCES = {"tariff": "한전 요금표 2025-04 산업용(을)", "buy_twh": "Factbook 2024 p.6", "scope1_2": "Factbook 2024 p.5", "grid_factor": "기후부 보도자료 2025-12-18, 2023 전력배출계수 0.4173(소비단)",
            "eaf_mt": "뉴스룸 광양 전기로 준공", "self_share": "ESG 에너지 페이지", "adder_fund": "한전 요금표 2023-05 (기후환경 9원, 연료비조정 5원 ±5, 기금 3.7·3.2·2.7%)", "bf_tco2_t": "Factbook 2024 Scope 1 69.67Mt ÷ 조강 약 35Mt = 1.99 t/t (역산)", "eaf_direct_t": "전기로 직접 배출 0.06~0.1 t/t (JRC 2012, IPCC 2006 0.08; 2차 출처)", "eaf_claim": "전자신문 2026-05-10 연 최대 350만 t 감축(경계 미명시), 뉴스룸 최대 약 75% 감축(Scope 1&2, 2017~19 평균 대비)",
            "h2_kwh_t": "Vogl 2018 3.48 MWh/tLS, Bhaskar 2020 3.72 MWh/tls (원문 확인)", "h2_mt": "포스코 HyREX 포항 실증 30만 t, 2028 목표 (보도)", "h2_bf_t": "Factbook 2024 Scope 1 69.67Mt ÷ 조강 약 35Mt = 1.99 t/t (역산)", "breakeven": "Bhaskar 2020: 전력배출계수 0.456 초과 시 수소환원 배출 증가"}
@@ -51,7 +51,7 @@ class Scenario:
     selfgen_cut: float = 0.0     # 고로 축소로 자체 발전이 줄어드는 비율 (줄어든 만큼 구매로 대체). 불확실성이 아니라 시나리오 축으로 다룬다
     grid_factor: float = 0.4173  # 전력배출계수 (tCO2eq/MWh), 2023 확정 소비단 값(기후부 2025-12-18). 2024 Scope2 기준선은 0.4541(2020~22 평균) 기반이라 증분과 계수가 다름
     price_change: float = 0.0    # 전력량·기본요금 변동률
-    band_rule: str = "2025"      # 요금 시간대 규칙: "2025"(현행), "A"·"B"(2026 개편 해석 둘, 단가 변화 포함)
+    band_rule: str = "B"         # 요금 시간대 규칙: "B"(2026 개편 후, 기본. 산업용(을)은 2026-10-01부터 전체 적용), "2025"(개편 전 시간대·단가, 비교용)
     load_factor: float = 0.8     # 부하율 (계약전력 = 평균전력 / 부하율)
     plan: str = "B3"             # 요금제: 고압A/B/C(수전 전압) + 선택Ⅰ~Ⅲ. 광양 규모는 154kV 이상(B/C)·월 500시간 초과 가동(Ⅲ)으로 가정
     fund: float = 0.027          # 전력산업기반기금 요율. 2025-07 이후 2.7%, 과거 기준 비교용으로 0.032·0.037 허용
@@ -70,7 +70,7 @@ class Scenario:
     h2_resid_t: float = 0.0      # 수소환원 잔여 직접 배출 (tCO2/t). 논문은 0으로 가정
 
 
-SCENARIOS = {"S0": Scenario(eaf_mt=0), "S1": Scenario(), "S1P": Scenario(eaf_basis="posco_net"), "S2": Scenario(selfgen_cut=0.15), "S3A": Scenario(band_rule="A"), "S3B": Scenario(band_rule="B"),
+SCENARIOS = {"S0": Scenario(eaf_mt=0), "S1": Scenario(), "S1P": Scenario(eaf_basis="posco_net"), "S1O": Scenario(band_rule="2025"), "S2": Scenario(selfgen_cut=0.15),
              "S4": Scenario(eaf_mt=0, h2_mt=0.3), "S4G": Scenario(eaf_mt=0, h2_mt=0.3, h2_green=1.0), "S5": Scenario(h2_mt=0.3)}  # S4 수소환원(전력망 전력), S4G 수소환원(무탄소 전력), S5 전기로(S1)+수소환원(S4)
 
 
@@ -97,7 +97,7 @@ def check_range(s):
 
 @cache
 def avg_price(rule, plan="A2"):
-    """avg_price = 평균 요금. 24시간 일정 부하의 전력량요금 평균(원/kWh). UCI 달력(분석 결과)의 계절·시간대 비중으로 가중하고, 개편 규칙(A/B)이면 단가 변화도 반영."""
+    """avg_price = 평균 요금. 24시간 일정 부하의 전력량요금 평균(원/kWh). UCI 달력(분석 결과)의 계절·시간대 비중으로 가중하고, 개편 규칙(B)이면 단가 변화도 반영. B는 공식 시간표로 직접 계산한 값과 일치 확인."""
     from src.load_profile import (  # 순환 import를 피하려고 함수 안에서 불러옴
         load_uci,
         price,

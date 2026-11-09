@@ -1,4 +1,4 @@
-"""평가용 질문 세트 30개와 기대 답 (처음부터 끝까지 실행). 정상 16 · 정보 부족 7 · 범위 밖/근거 없음 7.
+"""평가용 질문 세트 30개와 기대 답 (처음부터 끝까지 실행). 정상 17 · 정보 부족 7 · 범위 밖/근거 없음 6.
 기대 답 = 시뮬레이터·역산 함수 결과. hand가 있는 항목은 시뮬레이터를 쓰지 않은 손계산 식으로 한 번 더 대조한다(독립 검증).
 어시스턴트 평가는 이 QUESTIONS를 import해서 쓴다: 숫자 일치(정상), 되묻기(정보 부족), 거절(범위 밖) 여부를 본다.
 규칙: 규모(생산량)나 목표가 없으면 되묻는다. 가동률·요금제 같은 보조 변수는 기본값을 쓰되 답변에 가정으로 밝힌다.
@@ -25,7 +25,7 @@ N = [  # (id, 질문, 기대 값 dict, 손계산 dict 또는 None)
  ("N05", "수소환원 30만 t을 가동률 70%, 전력망 전력으로 돌리면 추가 전력과 순 저감은?", dict(add_twh=p(eaf_mt=0, h2_mt=0.3)["add_twh"], abate_tco2=c(eaf_mt=0, h2_mt=0.3)["abate_tco2"]), dict(add_twh=0.21 * H, abate_tco2=0.21e6 * (1.99 - H * GF))),
  ("N06", "N05의 수소환원 전력을 전부 무탄소로 바꾸면 순 저감은?", dict(abate_tco2=c(eaf_mt=0, h2_mt=0.3, h2_green=1)["abate_tco2"]), dict(abate_tco2=0.21e6 * 1.99)),
  ("N07", "전기로 가동 중 고로 축소로 자체 발전이 15% 줄면 추가 구매 전력은 몇 TWh야?", dict(add_twh=p(selfgen_cut=0.15)["add_twh"]), dict(add_twh=2.5 * 0.7 * E + 21 * 0.855 * 0.15)),
- ("N08", "전기로(가동률 70%)를 요금제 A2로 계약하면 전기요금은 연 몇 억 원이야?", dict(total_eok=k_(plan="A2")["total_eok"]), None),
+ ("N08", "전기로(가동률 70%, 개편 후 요금)를 요금제 A2로 계약하면 전기요금은 연 몇 억 원이야?", dict(total_eok=k_(plan="A2")["total_eok"]), None),
  ("N09", "연 순 저감 100만 t을 전기로로 달성하려면 몇 백만 t을 만들어야 해?", dict(required_mt=required_output(1e6, "eaf")["required_mt"]), dict(required_mt=1e6 / (1.99 - 0.08 - E * GF) / 1e6)),
  ("N10", "연 순 저감 100만 t을 무탄소 50% 수소환원으로 달성하려면 필요한 생산량과 전력은?", dict(required_mt=required_output(1e6, "h2", h2_green=0.5)["required_mt"], power_twh=required_output(1e6, "h2", h2_green=0.5)["power_twh"]), dict(required_mt=1 / (1.99 - H * GF * 0.5), power_twh=H / (1.99 - H * GF * 0.5))),
  ("N11", "수소환원 50만 t/년으로 순 저감 50만 t을 하려면 무탄소 전력이 몇 %나 필요해?", dict(green_share=mg()["green_share"]), dict(green_share=1 - (1.99 - 0.5 / 0.5) / (H * GF))),
@@ -34,6 +34,7 @@ N = [  # (id, 질문, 기대 값 dict, 손계산 dict 또는 None)
  ("N14", "전력 1MWh당 순 저감은 전기로와 수소환원(전력망) 중 어느 쪽이 얼마나 커?", dict(eaf=c(eaf_util=1, h2_mt=0)["abate_per_mwh"], h2=c(eaf_mt=0, h2_mt=1, h2_util=1)["abate_per_mwh"]), dict(eaf=(1.99 - 0.08 - E * GF) / E, h2=(1.99 - H * GF) / H)),
  ("N15", "배출권 가격을 t당 2만 원으로 가정하면 S1(전기로 70%)의 순 저감 참고 가치는 몇 억 원이야?", dict(ets_value_eok=c(ets_price=2e4)["ets_value_eok"]), dict(ets_value_eok=(1.75e6 * (1.99 - 0.08) - 1.75e6 * E * GF) * 2e4 / 1e8)),
  ("N16", "포스코가 말한 순감축 1.4 t/t를 그대로 쓰면 S1 순 저감은 몇 tCO2야?", dict(abate_tco2=c(eaf_basis="posco_net")["abate_tco2"]), dict(abate_tco2=1.75e6 * 1.4)),
+ ("N17", "2026년 요금 개편 전(2025년 시간대·단가)으로 계산하면 S1 요금은 연 몇 억 원이야?", dict(total_eok=k_(band_rule="2025")["total_eok"]), None),
 ]
 M = [  # 정보 부족: 되물어야 하는 항목
  ("M01", "수소환원을 하면 탄소가 얼마나 줄어?", "생산 규모(h2_mt)"),
@@ -50,8 +51,7 @@ R = [  # 범위 밖/근거 없음: 거절. kw가 있으면 simulate가 ValueErro
  ("R03", "수소환원 설비 투자비와 투자 회수 기간은?", None, "투자비 미반영"),
  ("R04", "전기로 가동률을 150%로 돌리면 어떻게 돼?", dict(eaf_util=1.5), "허용 범위 밖"),
  ("R05", "수소환원을 3,000만 t으로 늘리면?", dict(h2_mt=30), "허용 범위 밖"),
- ("R06", "배출권을 실제로 얼마나 덜 사도 되는지 알려줘.", None, "할당량·보유량 없음(참고 가치만 가능)"),
- ("R07", "2026년 요금 개편의 최종 확정 단가는?", None, "미확정(A/B 해석만 있음)"),
+ ("R06", "배출권을 실제로 얼마나 덜 사도 되는지 알려줘.", None, "할당량·보유량 없음. 거절하되 가정 가격을 주면 참고 가치는 계산할 수 있다고 안내"),
 ]
 QUESTIONS = [dict(id=i, type="normal", q=q, expect=e, hand=h) for i, q, e, h in N] + [dict(id=i, type="ask", q=q, missing=m) for i, q, m in M] + [dict(id=i, type="refuse", q=q, kw=kw, reason=r) for i, q, kw, r in R]
 
