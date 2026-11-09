@@ -36,6 +36,10 @@
   .status { display: flex; align-items: center; gap: .5rem; margin: 0; font-size: .875rem; color: var(--rule); }
   .status::before { content: ""; width: .5rem; height: .5rem; border-radius: 50%; background: var(--slate); }
   .status.on::before { background: var(--clean); box-shadow: 0 0 0 1px #fff; }
+  .top-right { display: flex; align-items: center; gap: 1rem; }
+  .new-chat { border: 1px solid var(--slate); border-radius: 4px; background: none; color: #fff; font-size: .875rem; font-weight: 600; padding: .3rem .8rem; cursor: pointer; }
+  .new-chat:hover { border-color: #fff; }
+  body:not(.chatting) .new-chat { display: none; }
 
   /* 처음엔 질문 한 칸만 가운데. 답변에 계산 결과가 있으면(body.has-result) 오른쪽에 결과 창이 열린다 */
   main { display: grid; grid-template-columns: minmax(0, 46rem); justify-content: center; gap: clamp(1.5rem, 4vw, 3.5rem);
@@ -63,6 +67,9 @@
   .examples button:hover { border-left-color: var(--ink); color: var(--ink); }
 
   .log { list-style: none; margin: 0; padding: 0; display: grid; gap: 1.25rem; }
+  .followups { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: .75rem; }
+  .followups button { border: 1px solid var(--rule); border-radius: 999px; background: var(--steel); color: var(--ink); font-size: .875rem; padding: .3rem .85rem; cursor: pointer; text-align: left; }
+  .followups button:hover { border-color: var(--accent); color: var(--accent); }
   .open-result { margin-top: .75rem; border: 1px solid var(--accent); border-radius: 4px; background: none; color: var(--accent); font-weight: 600; font-size: .875rem; padding: .35rem .8rem; cursor: pointer; }
   .log li { max-width: 40em; }
   .log .user { font-weight: 600; padding-left: .75rem; border-left: 2px solid var(--ink); }
@@ -143,7 +150,10 @@
 <body>
 <header class="top">
   <h1>제철공정의 저탄소 전환을 돕는 AI 어시스턴트 <small>Steel_Connect</small></h1>
-  <p class="status" id="status">AI 연결 확인 중</p>
+  <div class="top-right">
+    <p class="status" id="status">AI 연결 확인 중</p>
+    <button type="button" class="new-chat" id="newChat">새 대화</button>
+  </div>
 </header>
 
 <main>
@@ -304,7 +314,7 @@ const LABEL = {
   path: "경로", vary: "바꿀 조건", values: "값 목록", "eaf_mt 또는 h2_mt": "전기로 또는 수소환원 생산 능력",
 };
 const H2_KWH_SPREAD = [3480, 3720];  // 원단위 문헌값 양 끝(Vogl 2018, Bhaskar 2020). 필요 무탄소 전력을 범위로 보여 줄 때 sweep_green에 넘김
-let INFO = null, session = sessionStorage.getItem("sc-session") || "";
+let INFO = null, session = "";  // 대화 번호는 메모리에만 둔다. 새로고침하면 새 대화
 const extra = { min_green: {}, simulate: {}, compare_paths: {} };  // AI가 정했지만 입력칸이 없는 인자. 다시 계산할 때 그대로 넘긴다
 
 const num = (v, d = 2) => Number(v).toLocaleString("ko-KR", { minimumFractionDigits: d, maximumFractionDigits: d });
@@ -496,6 +506,77 @@ function callsHtml(calls) {
   return `<div class="calls">계산 도구 호출: ${calls.map(c => `<code>${esc(c.name)}</code> ${esc(desc(c.output))}`).join(" / ")}</div>`;
 }
 
+/* 이어서 해 볼 조건. 바꾸는 값은 입력 가정이고, 결과는 다시 계산 도구(/api/calc)가 낸다 */
+const GF_WHATIF = 0.3;  // 전력배출계수 가정값. 허용 범위(0.2~0.56) 안의 둥근 값
+function suggest(hit) {
+  const a = hit.input, x = hit.output.result, out = [];
+  const gf = !(a.grid_factor <= GF_WHATIF), gfArgs = a.grid_factor === undefined ? {} : { grid_factor: a.grid_factor };
+  if (hit.name === "min_green") {
+    const cur = a.green_supply_twh || 0;  // 처음엔 필요량의 절반쯤, 이미 확보량이 있으면 필요량(0.1 TWh 단위 올림)까지
+    const s = cur > 0 ? Math.ceil(x.green_twh * 10) / 10 : Math.max(0.1, Math.round(x.green_twh * 5) / 10);
+    if (x.feasible && x.gap_twh > 0 && s !== cur) out.push([cur > 0 ? `무탄소 전력을 ${plain(s)} TWh까지 늘리면?` : `무탄소 전력 ${plain(s)} TWh를 확보했다면?`, "min_green", { ...a, green_supply_twh: s }]);
+    if (gf) out.push([`전력배출계수 ${GF_WHATIF}을 가정하면?`, "min_green", { ...a, grid_factor: GF_WHATIF }]);
+    out.push(["같은 목표를 전기로와 비교하면?", "compare_paths", { target_abate_t: a.target_abate_t, ...gfArgs }]);
+    out.push([`목표를 ${man(a.target_abate_t * 2)}만 t로 두 배 올리면?`, "min_green", { ...a, target_abate_t: a.target_abate_t * 2 }]);
+  }
+  if (hit.name === "simulate") {
+    if (a.eaf_mt > 0 && (a.eaf_util ?? INFO.defaults.eaf_util) < 1) out.push(["전기로 가동률이 100%면?", "simulate", { ...a, eaf_util: 1 }]);
+    if (!(a.h2_mt > 0)) out.push(["수소환원 30만 t(무탄소 전력 100%)을 더하면?", "simulate", { ...a, h2_mt: 0.3, h2_green: 1 }]);
+    if (a.ets_price == null) out.push(["배출권 가격을 2만 원/t로 가정하면?", "simulate", { ...a, ets_price: 20000 }]);
+    if (gf) out.push([`전력배출계수 ${GF_WHATIF}을 가정하면?`, "simulate", { ...a, grid_factor: GF_WHATIF }]);
+  }
+  if (hit.name === "compare_paths") {
+    if (gf) out.push([`전력배출계수 ${GF_WHATIF}을 가정하면?`, "compare_paths", { ...a, grid_factor: GF_WHATIF }]);
+    out.push([`수소환원 50만 t으로 이 목표를 내려면 무탄소 전력은?`, "min_green", { h2_output_mt: 0.5, target_abate_t: a.target_abate_t, ...gfArgs }]);
+    out.push([`목표를 ${man(a.target_abate_t / 2)}만 t로 절반 줄이면?`, "compare_paths", { ...a, target_abate_t: a.target_abate_t / 2 }]);
+  }
+  return out.slice(0, 3);
+}
+
+function attachResult(li, hit) {  // 답변 아래에 결과 보기 버튼과 이어서 해 볼 조건을 달고 결과 창을 연다
+  const b = document.createElement("button");
+  b.type = "button"; b.className = "open-result"; b.textContent = `계산 결과 보기 (${TITLE[hit.name]})`;
+  b.addEventListener("click", () => openResult(hit));
+  const box = document.createElement("div");
+  box.className = "followups"; box.setAttribute("aria-label", "이어서 계산해 볼 조건");
+  for (const [label, tool, args] of suggest(hit)) {
+    const c = document.createElement("button");
+    c.type = "button"; c.textContent = label;
+    c.addEventListener("click", () => followup(label, tool, args));
+    box.append(c);
+  }
+  li.append(b, box);
+  openResult(hit);
+}
+
+async function followup(label, tool, args) {  // AI를 거치지 않고 계산 도구를 바로 부른다(빠르고 AI 연결이 없어도 동작)
+  addMsg("user", esc(label));
+  const li = addMsg("ai wait", "계산 중입니다.");
+  try {
+    const r = await post("/api/calc", { tool, args });
+    if (r.status !== "ok") {
+      li.className = "ai err";
+      li.textContent = r.status === "ask" ? `값이 더 필요합니다: ${(r.missing || []).map(k => LABEL[k] || k).join(", ")}` : `근거가 있는 범위를 벗어나 계산하지 않았습니다. ${r.reason}`;
+      return;
+    }
+    li.className = "ai";
+    li.innerHTML = "<p>조건을 바꿔 계산 도구로 바로 다시 계산했습니다. 오른쪽 결과 창에서 확인하세요.</p>";
+    attachResult(li, { name: tool, input: args, output: r });
+  } catch (e) {
+    li.className = "ai err"; li.textContent = `서버에 연결하지 못했습니다 (${e.message}).`;
+  }
+}
+
+const FIRST_PLACEHOLDER = $("#q").placeholder;
+function newChat() {
+  session = "";
+  $("#log").innerHTML = "";
+  for (const t in extra) extra[t] = {};
+  document.body.classList.remove("chatting");
+  closeResult();
+  $("#q").value = ""; $("#q").placeholder = FIRST_PLACEHOLDER; $("#q").focus();
+}
+
 async function askAI(q) {
   const btn = $("#askBtn");
   btn.disabled = true;
@@ -507,16 +588,10 @@ async function askAI(q) {
     const res = await fetch("/api/ask", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ question: q, session }) });
     const d = await res.json();
     if (!res.ok) { pending.className = "ai err"; pending.textContent = d.error; return; }
-    session = d.session; sessionStorage.setItem("sc-session", session);
+    session = d.session;
     pending.className = "ai"; pending.innerHTML = md(d.answer) + callsHtml(d.calls);
     const hit = [...d.calls].reverse().find(c => c.name in RENDER && c.output.status === "ok");
-    if (hit) {
-      const b = document.createElement("button");
-      b.type = "button"; b.className = "open-result"; b.textContent = `계산 결과 보기 (${TITLE[hit.name]})`;
-      b.addEventListener("click", () => openResult(hit));
-      pending.append(b);
-      openResult(hit);
-    }
+    if (hit) attachResult(pending, hit);
   } catch (e) {
     pending.className = "ai err"; pending.textContent = `서버에 연결하지 못했습니다 (${e.message}). python -m src.web 이 실행 중인지 확인하세요.`;
   } finally { btn.disabled = false; }
@@ -532,6 +607,7 @@ $("#q").addEventListener("keydown", e => {
 });
 $$(".examples button").forEach(b => b.addEventListener("click", () => { $("#q").value = b.textContent; $("#q").focus(); }));
 $("#closeSheet").addEventListener("click", closeResult);
+$("#newChat").addEventListener("click", newChat);
 for (const tool of Object.keys(RENDER)) {
   const form = $("form", panel(tool));
   let timer;
