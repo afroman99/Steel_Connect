@@ -40,7 +40,8 @@ python3 analysis/04_민감도분석.py               # 토네이도, 몬테카�
 python3 analysis/05_검증.py                     # 내부 정합성 assert + 외부 수치 대조
 python3 analysis/06_경로비교.py                 # 전기로 vs 수소환원 경로 비교
 python3 analysis/07_배출계수_손익분기지도.py     # 전력배출계수 추세와 손익분기 지도
-python3 -m src.web --llm claude_code           # 웹 화면(http://127.0.0.1:8000). 내 PC의 Claude Code 로그인으로 AI 연결, API 키 불필요
+(cd web && npm install && npm run build)        # 웹 화면(React + COMPASS) 빌드. 처음 한 번, 화면을 고친 뒤에도
+python3 -m src.web --llm claude_code           # 웹 화면(http://127.0.0.1:8000). 내 PC의 Claude Code 로그인으로 AI 연결, API 키 불필요. 빌드가 없으면 옛 화면(web/legacy.html)
 python3 -m src.web                             # 웹 화면, 키가 있으면 그 연결(ANTHROPIC_API_KEY 등), 없으면 계산기만
 ```
 `data/Steel_industry_data.csv`(UCI Steel Industry Energy Consumption)는 저장소에 들어 있다.

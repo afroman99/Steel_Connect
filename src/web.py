@@ -3,12 +3,13 @@
 실행: 프로젝트 루트에서 python -m src.web  -> 브라우저로 http://127.0.0.1:8000  (--port, --host 0.0.0.0 으로 바꿈)
 API: POST /api/calc {tool, args} -> call_tool 결과 그대로({status: ok|ask|refuse, ...}, AI 없이) | POST /api/ask {question, session} -> {answer, calls, session}
      GET /api/tools -> 도구 설명·입력 형식·허용 범위(화면 슬라이더 범위용) | GET /api/status -> AI 연결 여부
-주의: 표준 라이브러리 http.server만 쓴다(새 패키지 없음). 화면(web/index.html)은 질문 하나만 보여 주고, 답변에 계산 결과가 있을 때만 오른쪽 결과 창을 연다. 숫자를 다시 계산하지 않는다. /api/calc는 AI 없이도 동작한다(결과 창의 '다시 계산').
+주의: 표준 라이브러리 http.server만 쓴다(새 패키지 없음). 화면(web/ React 앱, 빌드 결과 web/dist)은 질문 하나만 보여 주고, 답변에 계산 결과가 있을 때만 오른쪽 결과 창을 연다. 숫자를 다시 계산하지 않는다. /api/calc는 AI 없이도 동작한다(결과 창의 '다시 계산').
 공개 주소로 열 때 걸려 있는 보호는 IP당 질문 횟수 제한(RATE)뿐이다. 비밀번호는 앞단(프록시 등)에서 건다. 대화 기록은 서버 메모리에만 두고 재시작하면 사라진다.
 """
 
 import argparse
 import json
+import mimetypes
 import os
 import shutil
 import threading
@@ -24,7 +25,8 @@ from src.assistant_tools import REQUIRED, TOOL_SCHEMAS, TOOLS, call_tool
 from src.simulator import ETS_RANGE, PLANS, RANGE, Scenario
 
 # fmt: off
-PAGE = Path(__file__).resolve().parent.parent / "web/index.html"
+WEB = Path(__file__).resolve().parent.parent / "web"
+DIST, LEGACY = WEB / "dist", WEB / "legacy.html"  # 화면: React 빌드 결과(web/dist, cd web && npm run build). 없으면 옛 단일 HTML(legacy.html)로 대신한다
 RATE, MAX_Q, MAX_SESSIONS, MAX_BODY = (20, 3600), 500, 200, 20_000  # IP당 질문 20회/시간, 질문 500자, 보관 대화 200개, 요청 본문 20KB
 SESSIONS, HITS, CONN, LOCK = OrderedDict(), {}, {}, threading.Lock()  # 세션별 대화, IP별 질문 시각, LLM 연결(첫 질문 때 한 번 만듦)
 INFO = dict(tools=TOOLS, schemas=TOOL_SCHEMAS, required=REQUIRED, ranges={**RANGE, "ets_price": ETS_RANGE}, plans=list(PLANS), defaults=asdict(Scenario()))  # GET /api/tools 응답. 화면 슬라이더 범위·초기값
@@ -86,8 +88,13 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(data)
 
     def do_GET(self):
-        if self.path in ("/", "/index.html"):
-            return self.send(200, PAGE.read_bytes(), "text/html; charset=utf-8")
+        path = self.path.split("?")[0]
+        if path in ("/", "/index.html"):
+            page = DIST / "index.html" if (DIST / "index.html").exists() else LEGACY
+            return self.send(200, page.read_bytes(), "text/html; charset=utf-8")
+        f = (DIST / path.lstrip("/")).resolve()
+        if path.startswith("/assets/") and f.is_file() and DIST.resolve() in f.parents:  # 빌드된 JS·CSS·글꼴. DIST 밖(../)은 막는다
+            return self.send(200, f.read_bytes(), mimetypes.guess_type(f.name)[0] or "application/octet-stream")
         if self.path == "/api/status":
             return self.send(200, {"llm": llm_status()})
         if self.path == "/api/tools":
