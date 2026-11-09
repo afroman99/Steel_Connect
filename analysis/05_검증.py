@@ -7,10 +7,20 @@ import sys
 from dataclasses import asdict
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
-from src.simulator import BUY_TWH, PLANS, RANGE, SCENARIOS, SCOPE1_T, SCOPE2_T, Scenario, breakeven_grid, green_needed, simulate
+from src.simulator import (
+    BUY_TWH,
+    PLANS,
+    RANGE,
+    SCENARIOS,
+    SCOPE1_T,
+    SCOPE2_T,
+    Scenario,
+    breakeven_grid,
+    green_needed,
+    simulate,
+)
 
 # fmt: off
 S = lambda **k: simulate(**k)
@@ -55,6 +65,7 @@ assert near(S(eaf_mt=0, h2_mt=1, h2_util=1)["carbon"]["abate_tco2"], 1e6 * (1.99
 g = green_needed(0.4173)  # 필요 무탄소 비율로 수소환원을 돌리면 순 저감이 전기로(1 Mt)와 같아야 함
 assert near(S(eaf_mt=0, h2_mt=1, h2_util=1, h2_green=g)["carbon"]["abate_tco2"], S(eaf_mt=1, eaf_util=1, h2_mt=0)["carbon"]["abate_tco2"]), "green_needed가 simulate와 일치"
 from src.emission_factor import GRID
+
 assert abs(GRID.loc[2021:2023].mean() - 0.4330) < 1e-3, "연도별 값 검산: 2021~23 평균 0.4330(공식)"
 assert near(S(eaf_util=1, h2_mt=0)["carbon"]["abate_tco2"], 2.5e6 * (1.99 - 0.08 - 0.45 * 0.4173)), "전기로 순 저감 = 고로 1.99 - 직접 0.08 - 전력 0.45 x 계수 (같은 경계)"
 assert near(S(eaf_util=1, eaf_basis="posco_net")["carbon"]["abate_tco2"], 2.5e6 * 1.4), "포스코 순감축 옵션: 순 저감 = 1.4 t/t (전력 배출 재차감 없음)"
@@ -69,6 +80,7 @@ for f, a in ((green_needed, (0,)), (breakeven_grid, (0,))):
     except ValueError: pass
 assert green_needed(0.1, eaf_net_t=0.5) == 0, "수소환원 순 저감이 이미 전기로 이상이면 0(음수 자름)"
 from src.target import compare_paths, min_green, required_output
+
 T = 100e4
 r = required_output(T, "eaf"); assert near(S(eaf_mt=r["required_mt"], eaf_util=1, h2_mt=0)["carbon"]["abate_tco2"], T), "역산한 전기로 생산량으로 순방향 계산하면 목표와 일치"
 r = required_output(T, "h2", h2_green=0.5); assert near(S(eaf_mt=0, h2_mt=r["required_mt"], h2_util=1, h2_green=0.5)["carbon"]["abate_tco2"], T) and near(r["power_twh"], S(eaf_mt=0, h2_mt=r["required_mt"], h2_util=1)["power"]["add_twh"]), "수소환원 역산 일치"
@@ -84,10 +96,12 @@ for bad in (5000, 200000, True, "2만"):
     assert rejects(ets_price=bad), f"ets_price={bad!r} 거절돼야 함"
 assert not rejects(ets_price=29500) and not rejects(ets_price=157625), "K-ETS 현재 시세·EU ETS 1년 최고(ICAP) 허용"
 from src.assistant_tools import call_tool
+
 assert call_tool("simulate", {})["status"] == "ask" and call_tool("simulate", {"eaf_mt": 1, "eaf_util": 2})["status"] == "refuse" and call_tool("simulate", {"eaf_mt": 1, "x": 1})["status"] == "refuse" and call_tool("nope")["status"] == "refuse", "도구 래퍼: 되묻기·거절"
 assert call_tool("simulate", {"eaf_mt": 1})["status"] == "ok" and "eaf_util" in call_tool("simulate", {"eaf_mt": 1})["defaults_used"], "기본값 사용 변수 표시"
 from src.load_profile import annual_cost, load_uci, price, tou_band
 from src.simulator import DATA, PPA_ADD, REFORM, RULES, avg_price, band_share, ppa_unit
+
 u = load_uci(DATA); ub = tou_band(u, "B"); pr = price(u, ub, True, "A2")
 # 요금 시간대 = 한전 공식표 (UCI 원본 라벨은 2018 옛 시간대라 쓰지 않음)
 for rule in RULES:
@@ -125,6 +139,7 @@ assert near(pick("봄가을", "토", 12), 0.5 * 133.4), "봄가을 토요일 11~
 assert near(pick("봄가을", "휴일", 14), 116.0) and near(pick("여름", "휴일", 12), 116.0 - 5.1 + 5.1) and near(pick("봄가을", "평일", 12), 133.4), "할인은 봄가을 주말·공휴일 11~14시에만"
 assert near(price(u, ub, True, "A2", weekend=False)[(u.sea == "봄가을") & (u.day == "휴일") & (u.h == 12)].iloc[0], 116.0), "weekend=False면 할인 없음"
 from src.target import sweep_green
+
 sw = sweep_green(0.5, 50e4, "green_supply_twh", [0, 0.5, 1.0])
 assert [near(r["gap_twh"], min_green(0.5, 50e4, green_supply_twh=v)["gap_twh"]) for r, v in zip(sw, (0, 0.5, 1.0))] == [True] * 3 and sw[-1]["met"] and "연간" in sw[0]["note"], "sweep이 min_green과 일치, 한계 note 포함"
 assert [r["green_share"] for r in sweep_green(0.5, 50e4, "h2_kwh_t", [3000, 4000])][0] < sweep_green(0.5, 50e4, "h2_kwh_t", [3000, 4000])[1]["green_share"], "전력 원단위가 클수록 필요 무탄소 비율이 큼"
@@ -133,20 +148,25 @@ for bad in (lambda: sweep_green(0.5, 50e4, "plan", [1]), lambda: sweep_green(0.5
     except ValueError: pass
 assert call_tool("sweep_green", {"h2_output_mt": 0.5, "target_abate_t": 50e4, "vary": "green_supply_twh", "values": [0, 0.5]})["status"] == "ok" and call_tool("sweep_green", {"vary": "x"})["status"] == "ask", "도구 래퍼 sweep"
 from src.target import close_gap
+
 cg = close_gap(0.5, 50e4, 0.3)
 assert not cg["met"] and len(cg["levers"]) == 6 and all(l["check_gap_twh"] is not None and abs(l["check_gap_twh"]) < 1e-9 for l in cg["levers"] if l["lever"] != "switch_to_eaf" and l["in_range"]), "close_gap 각 레버를 다시 넣으면 부족분 0"
 assert close_gap(0.5, 50e4, 5.0)["levers"] == [] and close_gap(0.5, 150e4, 0.3)["levers"] == [], "부족분 없음/불가능이면 레버 없음"
 assert call_tool("close_gap", {"h2_output_mt": 0.5, "target_abate_t": 50e4})["status"] == "ask" and call_tool("close_gap", {"h2_output_mt": 0.5, "target_abate_t": 50e4, "green_supply_twh": 0.3})["status"] == "ok", "도구 래퍼 close_gap"
 from src.assistant_tools import TOOL_SCHEMAS, TOOLS, VARS
+
 assert set(TOOL_SCHEMAS) == set(TOOLS) and set(TOOL_SCHEMAS["simulate"]["properties"]) == set(VARS), "도구 스키마와 도구 목록·변수 일치"
 import pandas as pd
+
 from src.load_profile import shift_peak
+
 tiny = pd.DataFrame(dict(date=["a"] * 4, kwh=[1.0] * 4))
 try: shift_peak(tiny, pd.Series(["최", "최", "중", "중"]), 0.5); raise AssertionError("경부하 없는 날은 거절돼야 함")
 except ValueError: pass
 assert near(shift_peak(u, ub, 0.5).sum(), u.kwh.sum(), rel=1e-9), "실제 UCI에서 최대부하 이동은 에너지를 보존"
 # 그린 수소 vs 전력망 전기 (src/hydrogen.py): 숫자는 simulate와 일치해야 함
 from src.hydrogen import h2_supply
+
 hs = h2_supply(1.0); o = {x["key"]: x for x in hs["options"]}; th = hs["thresholds"]; sh = hs["split"]["elec_share"]
 assert near(hs["split"]["elec_kwh_t"], 51 * 52.5) and near(hs["split"]["process_kwh_t"], 3720 - 51 * 52.5), "수전해 = 51 kg x 52.5 kWh, 공정 = 3720 - 수전해"
 assert near(o["grid"]["scope2_tco2"], S(eaf_mt=0, h2_mt=1, h2_util=1)["carbon"]["add_tco2"]) and near(o["grid"]["power_cost_eok"], S(eaf_mt=0, h2_mt=1, h2_util=1)["cost"]["total_eok"]), "전력망 선택지 = simulate(수소환원 1Mt)"
@@ -172,6 +192,7 @@ for bad in (dict(h2_kg_t=70), dict(elec_kwh_kg=40), dict(ppa_krw_kwh=100), dict(
     except ValueError: pass
 assert abs(h2_supply(1.0, price_change=th["price_change_breakeven"])["options"][0]["krw_per_t"] - h2_supply(1.0, price_change=th["price_change_breakeven"])["options"][1]["krw_per_t"]) < 1e-6, "한전 요금 손익분기 변동률에서 두 비용이 같다"
 from src import h2_analysis as HA
+
 tq = HA.tornado()
 assert bool(tq.loc["ppa_krw_kwh", "flip"]) and not bool(tq.loc["ets_price", "flip"]) and not bool(tq.loc["grid_factor", "flip"]), "PPA 단가는 혼자서 추천을 뒤집고, K-ETS 범위 탄소 가격·배출계수 기준은 못 뒤집는다"
 g40, g60 = HA.gap_scales_with_h2()
@@ -181,12 +202,14 @@ tl0 = HA.timeline(years=(2030,), kinds=("2018 기준 하락 속도",)).iloc[0]
 assert near(tl0.손익분기_탄소가격, h2_supply(1.0, grid_factor=tl0.배출계수)["thresholds"]["premium_krw_kwh"] / tl0.배출계수 * 1000), "시점별 손익분기 = PPA 할증 / 배출계수"
 from src.emission_factor import HOUR_GF_RATIO, TOU_GF_RATIO
 from src.hydrogen import HOURLY_MATCH
+
 assert near(o["offpeak"]["scope2_tco2"], (1e6 * 51 * 52.5 * TOU_GF_RATIO["경"] + 1e6 * (3720 - 51 * 52.5)) / 1000 * 0.4173), "경부하 운전 배출 = 수전해 x 계수 x 경부하 비율 + 공정 x 계수"
 sol = hs["hourly"]["rows"]["solar"]
 assert near(sol["scope2_tco2"], (1e6 * 51 * 52.5 * (1 - HOURLY_MATCH["solar"]["share"]) * HOURLY_MATCH["solar"]["backfill_ratio"] + 1e6 * (3720 - 51 * 52.5)) / 1000 * 0.4173), "시간 일치 배출 = 못 채운 수전해 x 그 시간 계수 + 공정"
 assert o["green"]["abate_per_t"] > hs["hourly"]["rows"]["mix"]["abate_per_t"] > sol["abate_per_t"] > o["grid"]["abate_per_t"], "순 저감: 연간 계약 그린 > 시간 일치 반반 > 시간 일치 태양광 > 전력망"
 assert abs(sum(HOUR_GF_RATIO) / 24 - 1) < 0.01 and min(HOUR_GF_RATIO) == HOUR_GF_RATIO[12], "시각별 비율 평균 1, 정오가 가장 낮음(2025)"
 from src import abatement as AB
+
 cv, ao = AB.curve(), AB.options()
 assert list(cv.index) == ["eaf", "ppa", "h2"] and cv.krw_per_tco2.is_monotonic_increasing and near(cv.x1.iloc[-1], cv.abate_mt.sum()), "감축 비용 곡선: 싼 순서, 누적 감축량 = 합"
 assert near(cv.loc["eaf", "krw_per_tco2"], S()["cost"]["power_cost_per_tco2_krw"]), "전기로 175만 t = S1(250만 t x 70%)의 전력비용 / 순 저감"
@@ -199,6 +222,7 @@ for bad in (dict(eaf_output_mt=3), dict(selfgen_cut=0.1)):
     try: AB.options(**bad); raise AssertionError(f"{bad} 거절돼야 함")
     except ValueError: pass
 import json
+
 ac = call_tool("abatement_curve", {"ets_price": 100000})
 assert ac["status"] == "ok" and [r["key"] for r in ac["result"]["curve"]] == list(cv.index) and near(ac["result"]["curve"][1]["krw_per_tco2"], cv.loc["ppa", "krw_per_tco2"]), "도구 abatement_curve = curve"
 assert ac["result"]["pays"][-1]["measures"] == ["eaf", "ppa"] and json.dumps(ac, ensure_ascii=False, allow_nan=False, default=str), "입력한 탄소 가격에서 덮이는 조치, 결과는 NaN 없는 JSON"
@@ -206,9 +230,11 @@ pp = ac["result"]["thresholds"]["ppa_parity_krw_kwh"]
 assert 130 <= pp <= 190 and abs(AB.curve(ppa_krw_kwh=pp).loc["ppa", "krw_per_tco2"]) < 1e-6 and near(ac["result"]["thresholds"]["unit_ppa_krw_kwh"], th["unit_ppa_krw_kwh"]), "PPA 동등 단가에서 직접PPA 전환 비용 0, PPA 부담 단가 = h2_supply"
 assert call_tool("abatement_curve", {"x": 1})["status"] == "refuse" and call_tool("abatement_curve", {"ets_price": 1000})["status"] == "refuse", "모르는 인자·범위 밖 탄소 가격 거절"
 from src.ext_data import hourly_match
+
 assert hourly_match([1, 1, 1, 1], [1] * 4) == dict(share=1.0, surplus=0.0, backfill_ratio=0.0, storage_h=0.0) and near(hourly_match([2, 0], [1, 1])["share"], 0.5), "시간 일치 함수 손계산"
 assert call_tool("h2_supply", {})["status"] == "ask" and call_tool("h2_supply", {"h2_output_mt": 1})["status"] == "ok" and call_tool("h2_supply", {"h2_output_mt": 1, "x": 1})["status"] == "refuse", "도구 래퍼 h2_supply"
 from src import ext_data
+
 if ext_data.available():  # 외부 원본(data/의 kpx_*·epsis_*·icap_*, ICAP만 git 제외)이 있으면 코드 상수를 다시 계산해 대조
     from src.hydrogen import EUETS_1Y, KETS_1Y
     gg = ext_data.hourly_grid(); tr = ext_data.tou_ratio(gg); mt = ext_data.match_table(None, gg); es = ext_data.ets_stats()
@@ -226,6 +252,7 @@ if ext_data.available():  # 외부 원본(data/의 kpx_*·epsis_*·icap_*, ICAP�
     assert near(ext_data.fuel_share().sum(), 100) and ext_data.data_checks().loc["kpx_fuel_hourly_2025.csv", "빈칸"] == 0, "연료 비중 합 100%, 거래소 자료 빈칸 없음"
     print("[외부 데이터] 시간대 배출 비율·시간 일치율·탄소 가격·판매단가 상수가 원본 재계산과 일치")
 from src import eda
+
 uraw = eda.read_csv(eda.UCI)
 assert near(eda.implied_co2_factor(uraw), uraw["CO2(tCO2)"].sum() / uraw.Usage_kWh.sum() * 1000) and 0.42 < eda.implied_co2_factor(uraw) < 0.422, "UCI CO2 열 = 사용량 x 약 0.4208"
 assert all(0 < v < 1 for v in eda.label_agreement(u).values()), "UCI 라벨은 공식 시간대와 일부만 일치(옛 시간대)"
@@ -233,7 +260,8 @@ fm = eda.factbook_metrics()
 assert abs(fm.loc["구매 전력 TWh", "2024"] - BUY_TWH) < 0.01 and near(fm.loc["Scope 2 / 구매 전력 t/MWh", "2024"], SCOPE2_T / (fm.loc["구매 전력 TWh", "2024"] * 1e6)), "Factbook 구매 전력·Scope 2 원단위 = 시뮬레이터 상수와 일치"
 qq = eda.quality(pd.DataFrame(dict(a=[0, 1, None], b=[-1, 2, 2])), key="b")
 assert qq.loc["a", "결측"] == 1 and qq.loc["b", "음수"] == 1 and qq.attrs["중복"] == 1 and qq.loc["a", "0비율_%"] == 33.3, "품질 점검표 손계산"
-assert eda.inventory().set_index("파일").loc["icap_systems.json", "git"] == "제외", "ICAP 원본은 git 제외로 표시"
+inv = eda.inventory().set_index("파일")
+assert "icap_systems.json" not in inv.index or inv.loc["icap_systems.json", "git"] == "제외", "ICAP 원본은 있으면 git 제외로 표시(재배포 금지라 없을 수 있음)"
 print("[내부 정합성] 통과")
 
 # 2. 외부 수치 대조 (일치 여부와 차이를 그대로 보고)
