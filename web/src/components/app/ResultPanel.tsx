@@ -37,25 +37,51 @@ function Fold({ title, children, open }: { title: string; children: ReactNode; o
   )
 }
 
-/** 요구 전력을 전력망 / 확보한 무탄소 / 부족분으로 나눠 보여 주는 막대. 너비만 비율로 계산하고 표시 숫자는 결과값 그대로 */
-function PowerBar({ x }: { x: Out }) {
-  const w = (v: number) => `${x.feasible && x.power_twh ? (v / x.power_twh) * 100 : 0}%`
-  const grid = x.power_twh - (x.green_twh || 0), secured = (x.green_twh || 0) - (x.gap_twh || 0), gap = x.gap_twh || 0
+const R = 15.9155 // 둘레가 100이 되는 반지름. 조각 길이를 %로 바로 쓴다
+
+/** 요구 전력을 전력망 / 확보한 무탄소 / 부족분으로 나눈 원그래프(도넛). 조각 크기만 비율로 계산하고 표시 숫자는 결과값 그대로 */
+function PowerDonut({ x }: { x: Out }) {
+  const total = x.feasible && x.power_twh ? x.power_twh : 0
+  const green = x.green_twh || 0, gap = x.gap_twh || 0
+  const parts = [
+    { key: "grid", v: x.power_twh - green, stroke: "var(--grid)" },
+    { key: "secured", v: green - gap, stroke: "var(--clean)" },
+    { key: "gap", v: gap, stroke: "url(#need-hatch)" },
+  ]
+  let start = 0
   return (
-    <figure className="space-y-2">
-      <div
-        role="img"
-        aria-label={x.feasible ? `요구 전력 ${num(x.power_twh)} TWh 중 무탄소 ${num(x.green_twh)} TWh, 부족분 ${num(x.gap_twh)} TWh` : "무탄소 100%로도 목표 미달"}
-        className="flex h-10 overflow-hidden rounded-xl bg-muted"
-      >
-        <span className="bg-grid" style={{ width: w(grid) }} />
-        <span className="bg-clean" style={{ width: w(secured) }} />
-        <span style={{ width: w(gap), background: "repeating-linear-gradient(135deg, var(--need) 0 6px, var(--foreground) 6px 9px)" }} />
+    <figure className="flex flex-wrap items-center gap-6">
+      <div className="relative size-44 shrink-0">
+        <svg
+          viewBox="0 0 42 42"
+          className="size-full -rotate-90"
+          role="img"
+          aria-label={x.feasible ? `요구 전력 ${num(x.power_twh)} TWh 중 무탄소 ${num(x.green_twh)} TWh, 부족분 ${num(x.gap_twh)} TWh` : "무탄소 100%로도 목표 미달"}
+        >
+          <defs>
+            <pattern id="need-hatch" width="2.2" height="2.2" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+              <rect width="2.2" height="2.2" style={{ fill: "var(--need)" }} />
+              <rect width="0.7" height="2.2" style={{ fill: "var(--foreground)" }} />
+            </pattern>
+          </defs>
+          <circle cx="21" cy="21" r={R} fill="none" strokeWidth="6" style={{ stroke: "var(--muted)" }} />
+          {total > 0 && parts.map((p) => {
+            const pct = (p.v / total) * 100
+            const el = <circle key={p.key} cx="21" cy="21" r={R} fill="none" strokeWidth="6" strokeDasharray={`${pct} ${100 - pct}`} strokeDashoffset={-start} style={{ stroke: p.stroke }} className="motion-safe:transition-all motion-safe:duration-500" />
+            start += pct
+            return el
+          })}
+        </svg>
+        <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
+          <span className="text-xs text-muted-foreground">요구 전력</span>
+          <span className="text-2xl font-semibold tracking-tight">{num(x.power_twh)}</span>
+          <span className="text-xs text-muted-foreground">TWh/년</span>
+        </div>
       </div>
-      <figcaption className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
-        <span className="inline-flex items-center gap-1.5"><i className="size-3 rounded-sm bg-grid" />전력망 전력</span>
-        <span className="inline-flex items-center gap-1.5"><i className="size-3 rounded-sm bg-clean" />확보한 무탄소 전력</span>
-        <span className="inline-flex items-center gap-1.5"><i className="size-3 rounded-sm bg-need" />부족분(추가로 확보할 무탄소) <b className="text-foreground">{x.feasible ? `${num(x.gap_twh)} TWh` : "-"}</b></span>
+      <figcaption className="space-y-2 text-sm text-muted-foreground">
+        <p className="flex items-center gap-2"><i className="size-3 rounded-sm bg-grid" />전력망 전력</p>
+        <p className="flex items-center gap-2"><i className="size-3 rounded-sm bg-clean" />확보한 무탄소 전력</p>
+        <p className="flex items-center gap-2"><i className="size-3 rounded-sm" style={{ background: "repeating-linear-gradient(135deg, var(--need) 0 3px, var(--foreground) 3px 4.5px)" }} />부족분(추가로 확보할 무탄소) <b className="text-foreground">{x.feasible ? `${num(x.gap_twh)} TWh` : "-"}</b></p>
       </figcaption>
     </figure>
   )
@@ -105,7 +131,7 @@ function MinGreenView({ tool, input, out, spread }: { tool: ToolName; input: Out
       {!x.feasible && (
         <p className="rounded-xl bg-destructive/10 p-3 text-sm text-destructive">{x.reason}. 이 생산량으로는 많아야 {man(x.max_abate_t)}만 tCO2/년까지 줄일 수 있습니다.</p>
       )}
-      <PowerBar x={x} />
+      <PowerDonut x={x} />
       <Figures>
         <Figure title="요구 전력" value={num(x.power_twh)} unit="TWh/년" />
         <Figure title="무탄소 전력 비율" value={x.feasible ? num(x.green_share * 100, 1) : "-"} unit="%" main sub={x.feasible ? `요구 전력 중 무탄소 ${num(x.green_twh)} TWh/년` : undefined} />

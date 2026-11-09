@@ -34,7 +34,7 @@ function ThemeButton() {
   const { resolvedTheme, setTheme } = useTheme()
   const dark = resolvedTheme === "dark"
   return (
-    <Button variant="ghost" size="icon" aria-label={dark ? "라이트 모드로 바꾸기" : "다크 모드로 바꾸기"} onClick={() => setTheme(dark ? "light" : "dark")}>
+    <Button variant="ghost" size="icon" className="text-white hover:bg-white/10 hover:text-white dark:hover:bg-white/10" aria-label={dark ? "라이트 모드로 바꾸기" : "다크 모드로 바꾸기"} onClick={() => setTheme(dark ? "light" : "dark")}>
       {dark ? <Sun aria-hidden strokeWidth={2} /> : <Moon aria-hidden strokeWidth={2} />}
     </Button>
   )
@@ -50,12 +50,14 @@ export default function App() {
   const session = useRef("")
   const seq = useRef(0)
   const end = useRef<HTMLDivElement>(null)
+  const resultRef = useRef<HTMLElement>(null)
 
   useEffect(() => {
     getInfo().then(setInfo).catch(() => setInfo(null))
     getStatus().then((s) => setLlm(s.llm)).catch(() => setLlm(null))
   }, [])
   useEffect(() => { end.current?.scrollIntoView({ block: "nearest", behavior: "smooth" }) }, [msgs])
+  useEffect(() => { if (result) resultRef.current?.scrollIntoView({ block: "start", behavior: "smooth" }) }, [result])
 
   const add = (m: Omit<Msg, "id">) => { const id = ++seq.current; setMsgs((l) => [...l, { ...m, id }]); return id }
   const patch = (id: number, m: Partial<Msg>) => setMsgs((l) => l.map((x) => (x.id === id ? { ...x, ...m } : x)))
@@ -98,21 +100,21 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-background text-foreground">
-      <header className="border-b border-border">
+      <header className="border-b-4 border-brand-accent bg-brand text-white">
         <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-x-6 gap-y-2 px-4 py-3 sm:px-8">
-          <h1 className="text-xl font-semibold">제철공정의 저탄소 전환을 돕는 AI 어시스턴트 <span className="ml-1 text-sm font-normal text-muted-foreground">스틸커넥트 · Steel Connect</span></h1>
+          <h1 className="text-xl font-semibold">제철공정의 저탄소 전환을 돕는 AI 어시스턴트 <span className="ml-1 text-sm font-normal text-white/70">스틸커넥트 · Steel Connect</span></h1>
           <div className="flex items-center gap-2">
-            <Badge variant="outline" className="gap-2" role="status">
-              <i aria-hidden className={`size-2 rounded-full ${llm ? "bg-clean" : "bg-muted-foreground"}`} />
+            <Badge variant="outline" className="gap-2 border-white/30 text-white" role="status">
+              <i aria-hidden className={`size-2 rounded-full ${llm ? "bg-clean" : "bg-white/50"}`} />
               {llm === undefined ? "AI 연결 확인 중" : llm ? `AI 연결됨 (${LLM_NAME[llm] ?? llm})` : "AI 연결 안 됨. 지금은 질문에 답할 수 없습니다"}
             </Badge>
-            {chatting && <Button variant="outline" size="sm" onClick={newChat}>새 대화</Button>}
+            {chatting && <Button variant="outline" size="sm" className="border-white/40 text-white hover:bg-white/10 hover:text-white hover:[&:not([data-size^=icon])]:text-white dark:border-white/40 dark:hover:bg-white/10" onClick={newChat}>새 대화</Button>}
             <ThemeButton />
           </div>
         </div>
       </header>
 
-      <main className={`mx-auto grid max-w-7xl gap-8 px-4 py-8 sm:px-8 ${result ? "lg:grid-cols-2" : "max-w-3xl"}`}>
+      <main className="mx-auto max-w-4xl px-4 py-8 sm:px-8">
         <section aria-labelledby="ask-h" className="min-w-0 space-y-6">
           {!chatting && <h2 id="ask-h" className="pt-12 text-4xl font-semibold tracking-tight">얼마나 만들고 탄소를 얼마나 줄일지 물어보세요.</h2>}
           <ol aria-live="polite" className="space-y-4">
@@ -140,12 +142,17 @@ export default function App() {
             ))}
           </ol>
           <div ref={end} />
+          {result && info && (
+            <section ref={resultRef} aria-label="계산 결과" className="scroll-mt-4">
+              <ResultPanel key={result.id} hit={result.hit} info={info} onClose={() => setResult(null)} />
+            </section>
+          )}
           <form onSubmit={(e) => { e.preventDefault(); submit() }} className="space-y-3">
             <label htmlFor="q" className="sr-only">질문</label>
             <div className="flex gap-2">
               <Input id="q" value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && e.nativeEvent.isComposing) e.preventDefault() }} maxLength={500}
                 placeholder={chatting ? "이어서 물어보세요. 예: 확보 가능한 무탄소 전력이 0.3 TWh면?" : EXAMPLES[1]} autoComplete="off" />
-              <Button type="submit" disabled={busy || !q.trim()}><Send aria-hidden strokeWidth={2} />질문하기</Button>
+              <Button type="submit" className="bg-brand text-white hover:bg-[color-mix(in_oklch,var(--brand),white_15%)] disabled:opacity-100" disabled={busy || !q.trim()}><Send aria-hidden strokeWidth={2} />질문하기</Button>
             </div>
             <p className="text-sm text-muted-foreground">답은 몇 초에서 십수 초 걸립니다.</p>
           </form>
@@ -155,15 +162,9 @@ export default function App() {
             </ul>
           )}
         </section>
-
-        {result && info && (
-          <aside aria-label="계산 결과" className="min-w-0 lg:sticky lg:top-4 lg:self-start">
-            <ResultPanel key={result.id} hit={result.hit} info={info} onClose={() => setResult(null)} />
-          </aside>
-        )}
       </main>
 
-      <footer className="mx-auto max-w-7xl border-t border-border px-4 py-6 sm:px-8">
+      <footer className="mx-auto max-w-4xl border-t border-border px-4 py-6 sm:px-8">
         <ul className="list-disc space-y-1 pl-5 text-sm text-muted-foreground">{LIMITS.map((t) => <li key={t}>{t}</li>)}</ul>
       </footer>
     </div>

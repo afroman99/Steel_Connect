@@ -184,8 +184,20 @@
     --clean: oklch(0.72 0.15 160);
     --need: oklch(0.83 0.16 85);
 }
+/* 상단 제목 띠와 아래 선. PANTONE Coated 공식 sRGB 근사값.
+   다크 모드는 검정에 가까운 바탕에 묻히지 않도록 한 단계 밝은 남색과 밝은 파랑을 쓴다 */
+:root {
+    --brand: #041E42;        /* PANTONE 282 C */
+    --brand-accent: #004C97; /* PANTONE 2945 C */
+}
+.dark {
+    --brand: #003865;        /* PANTONE 2955 C */
+    --brand-accent: #009CDE; /* PANTONE 2925 C */
+}
 @theme inline {
     --color-grid: var(--grid);
     --color-clean: var(--clean);
     --color-need: var(--need);
+    --color-brand: var(--brand);
+    --color-brand-accent: var(--brand-accent);
 }
