@@ -186,6 +186,25 @@ sol = hs["hourly"]["rows"]["solar"]
 assert near(sol["scope2_tco2"], (1e6 * 51 * 52.5 * (1 - HOURLY_MATCH["solar"]["share"]) * HOURLY_MATCH["solar"]["backfill_ratio"] + 1e6 * (3720 - 51 * 52.5)) / 1000 * 0.4173), "시간 일치 배출 = 못 채운 수전해 x 그 시간 계수 + 공정"
 assert o["green"]["abate_per_t"] > hs["hourly"]["rows"]["mix"]["abate_per_t"] > sol["abate_per_t"] > o["grid"]["abate_per_t"], "순 저감: 연간 계약 그린 > 시간 일치 반반 > 시간 일치 태양광 > 전력망"
 assert abs(sum(HOUR_GF_RATIO) / 24 - 1) < 0.01 and min(HOUR_GF_RATIO) == HOUR_GF_RATIO[12], "시각별 비율 평균 1, 정오가 가장 낮음(2025)"
+from src import abatement as AB
+cv, ao = AB.curve(), AB.options()
+assert list(cv.index) == ["eaf", "ppa", "h2"] and cv.krw_per_tco2.is_monotonic_increasing and near(cv.x1.iloc[-1], cv.abate_mt.sum()), "감축 비용 곡선: 싼 순서, 누적 감축량 = 합"
+assert near(cv.loc["eaf", "krw_per_tco2"], S()["cost"]["power_cost_per_tco2_krw"]), "전기로 175만 t = S1(250만 t x 70%)의 전력비용 / 순 저감"
+assert near(cv.loc["ppa", "krw_per_tco2"], th["ets_breakeven"]) and near(cv.loc["ppa", "abate_mt"], (BUY_TWH + S()["power"]["add_twh"]) * 0.4173), "직접PPA 전환 1t당 = PPA 할증 / 계수 = 그린 수소 손익분기 탄소 가격"
+assert near(ao.loc["h2_grid", "cost_eok"], o["grid"]["power_cost_eok"]) and near(ao.loc["h2_green", "abate_mt"] * 1e6, o["green"]["abate_tco2"]), "수소환원 비교 행 = h2_supply 선택지"
+assert near(ao.loc["h2_full", "abate_per_t_steel"], 1.99) and ao.loc["h2_full", "krw_per_tco2"] < ao.loc["h2_green", "krw_per_tco2"] < ao.loc["h2_grid", "krw_per_tco2"], "전력 100% PPA 순 저감 = 고로 1.99, 감축 1t당 비용: 100% PPA < 그린 < 전력망"
+assert AB.pays_at(29500, cv) == 0 and near(AB.pays_at(131595, cv), cv.loc[["eaf", "ppa"], "abate_mt"].sum()), "K-ETS 시세로는 덮이는 감축 없음, EU 수준이면 전기로·PPA 전환"
+assert AB.curve(ppa_krw_kwh=130).loc["ppa", "krw_per_tco2"] < 0, "PPA 130원이면 직접PPA가 한전보다 싸서 감축 비용이 음수"
+for bad in (dict(eaf_output_mt=3), dict(selfgen_cut=0.1)):
+    try: AB.options(**bad); raise AssertionError(f"{bad} 거절돼야 함")
+    except ValueError: pass
+import json
+ac = call_tool("abatement_curve", {"ets_price": 100000})
+assert ac["status"] == "ok" and [r["key"] for r in ac["result"]["curve"]] == list(cv.index) and near(ac["result"]["curve"][1]["krw_per_tco2"], cv.loc["ppa", "krw_per_tco2"]), "도구 abatement_curve = curve"
+assert ac["result"]["pays"][-1]["measures"] == ["eaf", "ppa"] and json.dumps(ac, ensure_ascii=False, allow_nan=False, default=str), "입력한 탄소 가격에서 덮이는 조치, 결과는 NaN 없는 JSON"
+pp = ac["result"]["thresholds"]["ppa_parity_krw_kwh"]
+assert 130 <= pp <= 190 and abs(AB.curve(ppa_krw_kwh=pp).loc["ppa", "krw_per_tco2"]) < 1e-6 and near(ac["result"]["thresholds"]["unit_ppa_krw_kwh"], th["unit_ppa_krw_kwh"]), "PPA 동등 단가에서 직접PPA 전환 비용 0, PPA 부담 단가 = h2_supply"
+assert call_tool("abatement_curve", {"x": 1})["status"] == "refuse" and call_tool("abatement_curve", {"ets_price": 1000})["status"] == "refuse", "모르는 인자·범위 밖 탄소 가격 거절"
 from src.ext_data import hourly_match
 assert hourly_match([1, 1, 1, 1], [1] * 4) == dict(share=1.0, surplus=0.0, backfill_ratio=0.0, storage_h=0.0) and near(hourly_match([2, 0], [1, 1])["share"], 0.5), "시간 일치 함수 손계산"
 assert call_tool("h2_supply", {})["status"] == "ask" and call_tool("h2_supply", {"h2_output_mt": 1})["status"] == "ok" and call_tool("h2_supply", {"h2_output_mt": 1, "x": 1})["status"] == "refuse", "도구 래퍼 h2_supply"

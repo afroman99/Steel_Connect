@@ -10,9 +10,10 @@ export const LABEL: Record<string, string> = {
   h2_bf_t: "대체 고로 배출(tCO2/t)", h2_resid_t: "수소환원 잔여 배출(tCO2/t)", h2_output_mt: "수소환원 연 생산량", target_abate_t: "목표 순 저감", green_supply_twh: "확보 가능한 무탄소 전력",
   path: "경로", vary: "바꿀 조건", values: "값 목록", "eaf_mt 또는 h2_mt": "전기로 또는 수소환원 생산 능력",
   ppa_krw_kwh: "직접PPA 계약 단가(원/kWh)", h2_kg_t: "쇳물 1t당 수소(kg)", elec_kwh_kg: "수전해 전력(kWh/kg)", green_h2_krw_kg: "구매 그린수소 단가(원/kg)",
+  eaf_output_mt: "전기로 연 생산량(백만 t)",
 }
 export const label = (k: string) => LABEL[k] ?? k
-export const TITLE = { min_green: "필요 무탄소 전력", close_gap: "부족분을 메우려면", simulate: "전환 시나리오", compare_paths: "경로 비교", h2_supply: "그린 수소 vs 전력망 전기" } as const
+export const TITLE = { min_green: "필요 무탄소 전력", close_gap: "부족분을 메우려면", simulate: "전환 시나리오", compare_paths: "경로 비교", h2_supply: "그린 수소 vs 전력망 전기", abatement_curve: "감축 비용 곡선" } as const
 
 // close_gap 레버의 값을 사람이 읽는 단위로 바꾼다(표시용 변환만, 계산 아님)
 export function leverValue(name: string, v: number | null | undefined) {

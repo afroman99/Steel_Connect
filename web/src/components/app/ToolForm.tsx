@@ -48,6 +48,14 @@ const FIELDS: Record<ToolName, Field[]> = {
     { kind: "num", name: "elec_kwh_kg", label: "수전해 전력 (kWh/kg)", range: "elec_kwh_kg", blank: "기본" },
     { kind: "select", name: "plan", label: "한전 요금제", note: "고압A/B/C + 선택Ⅰ~Ⅲ" },
   ],
+  abatement_curve: [
+    { kind: "num", name: "eaf_output_mt", label: "전기로 연 생산량 (만 t)", scale: 0.01, blank: "비우면 기본 175만 t", note: "실제 생산량. 기본은 광양 250만 t x 가동률 70%. 감축량(폭)만 바뀜" },
+    { kind: "num", name: "h2_output_mt", label: "수소환원 연 생산량 (만 t)", scale: 0.01, range: "h2_mt", rangeScale: 100, rangeUnit: "만 t", blank: "비우면 기본 100만 t", note: "감축량(폭)만 바뀜" },
+    { kind: "num", name: "ppa_krw_kwh", label: "재생에너지 직접PPA 단가 (원/kWh)", range: "ppa_krw_kwh", blank: "기본", note: "계약 단가. 망이용료 등 부대비용은 계산에서 더함" },
+    { kind: "num", name: "ets_price", label: "탄소(배출권) 가격 (원/tCO2)", range: "ets_price", blank: "비우면 K-ETS·EU 시세만", note: "넣으면 그 가격에서 덮이는 감축량을 더 계산" },
+    { kind: "num", name: "grid_factor", label: "전력배출계수 (tCO2/MWh)", range: "grid_factor", blank: "기본" },
+    { kind: "select", name: "plan", label: "한전 요금제", note: "고압A/B/C + 선택Ⅰ~Ⅲ" },
+  ],
 }
 const FMT = { mt: (v: number) => `${plain(v * 100)}만 t/년`, pct: (v: number) => `${plain(v * 100)}%`, gf: (v: number) => `${plain(v)} tCO2/MWh` }
 const rangeText = (info: Info | null, f: Num | Sld) => {
@@ -60,7 +68,7 @@ const rangeText = (info: Info | null, f: Num | Sld) => {
 
 export function ToolForm({ tool, info, input, onRun }: { tool: ToolName; info: Info | null; input: Out; onRun: (args: Out) => void }) {
   const fields = FIELDS[tool]
-  const dflt = (name: string) => (tool === "h2_supply" ? info?.h2_defaults?.[name] : undefined) ?? info?.defaults[name] // h2_supply는 기본값이 simulate와 다르다(탄소 가격 등)
+  const dflt = (name: string) => (tool === "h2_supply" || tool === "abatement_curve" ? info?.h2_defaults?.[name] : undefined) ?? info?.defaults[name] // h2_supply·abatement_curve는 기본값이 simulate와 다르다(PPA 단가 등)
   const initial = () => {
     const v: Record<string, string> = {}
     for (const f of fields) {

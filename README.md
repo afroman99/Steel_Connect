@@ -26,11 +26,12 @@ POSCO K-뉴딜 아카데미 2026 내부 해커톤 프로젝트.
   - 2025 실적(전력거래소 시간별 자료)으로 보면 경부하(밤) 전력은 연평균보다 0.7% 더 탄소가 많고 정오가 가장 깨끗하다(0.92배). 경부하 운전은 요금만 줄이고 탄소는 줄이지 못한다.
   - 같은 시간에 난 재생에너지만 인정하는 "시간 일치" 기준이면 태양광 PPA는 수전해 전력의 47%(풍력 69%, 반반 72%)만 채워, 그린 수소의 1t당 순 저감이 1.55 t에서 0.94 t(반반 1.22 t)로 준다.
 - 상황 분석(`analysis/17`): 국내 조건에서 추천을 혼자 뒤집는 변수는 **PPA 단가(157원/kWh 이하면 그린)와 한전 요금 인상(14% 이상이면 그린)**뿐이다. K-ETS 범위의 탄소 가격, 배출계수 기준(평균·한계), 요금제, 수소 원단위는 뒤집지 못한다. 조건을 함께 흔들면 국내에서 그린이 싼 경우가 약 43%로 "전력망 우세"는 아슬아슬하고, EU 수준 탄소 가격이면 99%가 그린이다. 전력망이 빨리 깨끗해지면(2030 낙관 계수 0.245) 그린이 정당화되는 탄소 가격이 약 14.9만 원으로 올라 EU 수준에서도 전력망이 유리해진다.
+- 감축 비용 곡선(`analysis/19`, 전력비용 기준): 탄소 1t을 줄이는 데 전기로 전환은 약 4.6만 원, 한전 전력(기존 구매 3.05 TWh + 전기로)을 직접PPA로 바꾸면 약 8.7만 원, 수소환원(전력 100% 직접PPA)은 약 40만 원이 든다. K-ETS 시세(2.95만 원)로는 어느 조치도 전력비용을 덮지 못하고, EU 수준(13.2만 원)이면 전기로와 직접PPA 전환(연 약 460만 t)까지 덮인다. 수소환원을 한다면 쇳물 1t당 전력비용은 전력망 전기가 가장 싸지만(65.9만 원 대 그린 75.6만 원), 감축 1t당으로는 전력망이 그린 수소의 약 3.1배(150만 원 대 49만 원)로 가장 비싸다. 수소환원·전기로 값은 고로 원료비 절감이 빠진 상한 쪽 값이다.
 - 한 문장: 수소환원의 탄소 효과는 전력이 얼마나 깨끗한가가 결정하고, 그린 수소를 쓸지는 재생에너지와 한전 전기의 가격 차, 그리고 탄소 가격이 결정한다.
 
 ## 폴더
 ```
-src/        모듈화한 함수 (simulator, load_profile, sensitivity, emission_factor, hydrogen, ext_data, eda 등)
+src/        모듈화한 함수 (simulator, load_profile, sensitivity, emission_factor, hydrogen, abatement, ext_data, eda 등)
 analysis/   분석 실행본(.py). 노트북(.ipynb)은 git 제외
 data/       데이터셋과 근거 PDF (git 제외)
 figures/    그림 (git 제외)
@@ -55,13 +56,14 @@ python3 analysis/11_자체발전_손익분기.py         # 자체발전 감소�
 python3 analysis/18_EDA_그림.py                 # EDA 그림(UCI·Factbook·한계 배출·시간 일치) figures/18_*.png
 python3 analysis/17_그린수소_전력망_상황분석.py   # 무엇이 판단을 흔드나(토네이도), 몬테카를로, 탄소 가격 x PPA 지도, 시점별 갈림길
 python3 analysis/16_외부데이터_시간대배출_재생.py  # 외부 공개 데이터(data/의 kpx_*·epsis_*·icap_*)로 시간대별 배출계수·시간 일치율·탄소 가격 범위 재계산
+python3 analysis/19_감축비용곡선.py             # 감축 비용 곡선: 조치별 감축 1t당 전력비용(전기로·직접PPA 전환·수소환원)과 탄소 가격 비교 (그림 figures/19)
 (cd web && npm install && npm run build)        # 웹 화면(React + COMPASS) 빌드. 처음 한 번, 화면을 고친 뒤에도
 python3 -m src.web --llm claude_code           # 웹 화면(http://127.0.0.1:8000). 내 PC의 Claude Code 로그인으로 AI 연결, API 키 불필요. 빌드가 없으면 옛 화면(web/legacy.html)
 python3 -m src.web                             # 웹 화면, 키가 있으면 그 연결(ANTHROPIC_API_KEY 등), 없으면 계산기만
 ```
 `data/Steel_industry_data.csv`(UCI Steel Industry Energy Consumption)는 저장소에 들어 있다.
 
-**Claude Code 연결(`--llm claude_code`)**: `claude` 명령이 설치·로그인된 PC에서만 된다. 모델은 `claude-sonnet-5-5`(`CLAUDE_MODEL`로 변경). Claude Code는 계산 도구 8개(`src/assistant_mcp.py`)만 쓸 수 있고 Bash 등 내장 도구는 꺼져 있다. 구독 사용량이 질문마다 차감되고 응답에 십수 초 걸린다.
+**Claude Code 연결(`--llm claude_code`)**: `claude` 명령이 설치·로그인된 PC에서만 된다. 모델은 `claude-sonnet-5-5`(`CLAUDE_MODEL`로 변경). Claude Code는 계산 도구 9개(`src/assistant_mcp.py`)만 쓸 수 있고 Bash 등 내장 도구는 꺼져 있다. 구독 사용량이 질문마다 차감되고 응답에 십수 초 걸린다.
 
 ## 데이터와 근거
 - UCI Steel Industry Energy Consumption (2018, 15분 간격 35,040행): 요금 시간대와 부하 형태 분석. 광양 소규모 사업장이라 제철소 대표가 아니고 방법 시연용이다.

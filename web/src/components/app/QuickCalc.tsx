@@ -8,6 +8,7 @@ import type { Hit, Info, Out, ToolName } from "@/lib/types"
 // 처음 계산할 입력 가정. 예시 질문과 같은 값이며 결과는 계산 도구(/api/calc)가 낸다
 const PRESETS: { tool: ToolName; desc: string; args: Out; wide?: boolean }[] = [
   { tool: "h2_supply", desc: "수소환원 100만 t의 수소를 그린 수소(재생에너지 PPA)로 만들지 전력망 전기로 만들지, 어떤 상황에서 무엇이 나은지", args: { h2_output_mt: 1 }, wide: true },
+  { tool: "abatement_curve", desc: "탄소 1t을 줄이는 데 드는 전력비용: 전기로 전환·직접PPA 전환·수소환원 중 무엇이 싸고, 탄소 가격으로 어디까지 감당되는지", args: {}, wide: true },
   { tool: "simulate", desc: "전기로 250만 t, 가동률 70%로 돌릴 때 추가 전력·순 저감·전기요금", args: { eaf_mt: 2.5, eaf_util: 0.7 } },
   { tool: "min_green", desc: "수소환원 50만 t으로 순 저감 50만 tCO2를 하려면 필요한 무탄소 전력", args: { h2_output_mt: 0.5, target_abate_t: 500000 } },
   { tool: "close_gap", desc: "무탄소 전력을 0.3 TWh만 확보했을 때 부족분을 메우는 조건", args: { h2_output_mt: 0.5, target_abate_t: 500000, green_supply_twh: 0.3 } },

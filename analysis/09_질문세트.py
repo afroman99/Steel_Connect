@@ -1,6 +1,7 @@
-"""평가용 질문 세트 35개와 기대 답 (처음부터 끝까지 실행). 정상 20 · 정보 부족 8 · 범위 밖/근거 없음 7.
+"""평가용 질문 세트 36개와 기대 답 (처음부터 끝까지 실행). 정상 21 · 정보 부족 8 · 범위 밖/근거 없음 7.
 기대 답 = 시뮬레이터·역산 함수 결과. hand가 있는 항목은 시뮬레이터를 쓰지 않은 손계산 식으로 한 번 더 대조한다(독립 검증).
 N20(그린 수소가 나은 상황)·N21(전력망 전기가 나은 상황)은 h2_supply 질문이라 숫자 외에 추천(pick)도 맞아야 한다(PICK, analysis/14 채점).
+N22(감축 비용 곡선)는 abatement_curve 질문. 감축 1t당 비용은 규모와 무관하므로 규모를 묻지 않고 기본값으로 답해야 한다(2026-11-10 추가).
 어시스턴트 평가는 이 QUESTIONS를 import해서 쓴다: 숫자 일치(정상), 되묻기(정보 부족), 거절(범위 밖) 여부를 본다.
 규칙: 질문은 단독으로 읽혀야 한다(앞 문항이나 "S1" 같은 약칭을 가리키지 않는다. 2026-11-09 평가에서 11개가 이 때문에 되물음이 나와 문장을 고침, 정답은 그대로). 규모(생산량)나 목표가 없으면 되묻는다. 가동률·요금제 같은 보조 변수는 기본값을 쓰되 답변에 가정으로 밝힌다.
 실행: 프로젝트 루트에서 python3 analysis/09_질문세트.py"""
@@ -9,6 +10,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from src.abatement import curve
 from src.hydrogen import h2_supply
 from src.simulator import breakeven_grid, simulate
 from src.target import close_gap, min_green, required_output
@@ -27,6 +29,7 @@ hv = lambda r, key, f: next(o for o in r["options"] if o["key"] == key)[f]
 PPA_U = (180 * 1.0352 + 9.79 + 11.682 + 0.12) * 1.027                  # 손계산 PPA 부담 단가: (계약가 x (1+손실 3.52%) + 망이용료 + 부가정산금 + 수수료) x (1+기금 2.7%)
 GRID_U = simulate(eaf_mt=0, h2_mt=1, h2_util=1)["cost"]["unit_krw_kwh"]  # 전력망 단가(원/kWh)는 요금표·달력 가중이라 손계산 대신 시뮬레이터 값
 PICK = {"N20": "green", "N21": "grid"}                                 # 기대 추천
+cv = curve()["krw_per_tco2"]                                           # 감축 비용 곡선(PPA 180원, 계수 0.4173): 조치별 감축 1t당 전력비용
 N = [  # (id, 질문, 기대 값 dict, 손계산 dict 또는 None)
  ("N01", "광양 전기로 250만 t을 가동률 70%로 돌리면 추가로 필요한 전력은 몇 TWh야?", dict(add_twh=p()["add_twh"]), dict(add_twh=2.5 * 0.7 * E)),
  ("N02", "광양 전기로 250만 t을 가동률 70%로 돌릴 때, 전력 사용으로 늘어나는 탄소(Scope 2)는 몇 tCO2야?", dict(add_tco2=c()["add_tco2"]), dict(add_tco2=2.5 * 0.7 * E * 1e6 * GF)),
@@ -54,6 +57,11 @@ N = [  # (id, 질문, 기대 값 dict, 손계산 dict 또는 None)
   dict(grid_krw_per_t=hv(hs_e, "grid", "krw_per_t"), green_krw_per_t=hv(hs_e, "green", "krw_per_t"), ets_breakeven=hs_e["thresholds"]["ets_breakeven"]),
   dict(grid_krw_per_t=H * GRID_U * 1000 + KAU * H * GF, green_krw_per_t=(ELEC * PPA_U + (H - ELEC) * GRID_U) * 1000 + KAU * (H - ELEC) * GF,
        ets_breakeven=(PPA_U - GRID_U) / GF * 1000)),  # 손익분기 탄소 가격 = (PPA 단가 - 전력망 단가) / 배출계수 (원/kWh ÷ t/MWh x 1000)
+ ("N22", "탄소 1t을 줄이는 데 드는 전력비용으로 보면 전기로 전환, 한전 전력을 재생에너지 직접PPA(180원/kWh)로 바꾸기, 수소환원(전력 100% 직접PPA) 중 어느 게 가장 싸? 각각 감축 1t당 전력비용도 알려줘.",
+  dict(eaf=float(cv["eaf"]), ppa=float(cv["ppa"]), h2=float(cv["h2"])),
+  dict(eaf=E * GRID_U * 1000 / (1.99 - 0.08 - E * GF),  # 전기로 = 전력비 / 순 저감 (쇳물 1t당)
+       ppa=(PPA_U - GRID_U) / GF * 1000,                # 직접PPA 전환 = PPA 할증 / 배출계수
+       h2=H * PPA_U * 1000 / 1.99)),                    # 수소환원 100% PPA = 전력 전부 PPA 단가 / 고로 1.99
 ]
 M = [  # 정보 부족: 되물어야 하는 항목
  ("M01", "수소환원을 하면 탄소가 얼마나 줄어?", "생산 규모(h2_mt)"),
