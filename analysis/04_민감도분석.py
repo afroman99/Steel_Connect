@@ -34,10 +34,10 @@ for cut in (0.0, 0.15, 0.30):
     for dist in ("uniform", "tri"):
         X, Y = runs[(cut, dist)] = monte_carlo(fixed={"eaf_mt": 2.5, "selfgen_cut": cut, "h2_mt": 0.0}, dist=dist)
         q = Y.quantile([0.05, 0.5, 0.95])
-        print(f"\n[몬테카를로 감소 {cut:.0%}, {dist}] 5/50/95% 순 탄소 {(q.net_tco2/1e4).round(0).tolist()}만 t, 요금 {q.total_eok.round(0).tolist()}억, 순 탄소가 0보다 클 확률 {(Y.net_tco2>0).mean():.0%}")
+        print(f"\n[몬테카를로 감소 {cut:.0%}, {dist}] 5/50/95% 순 탄소 {(q.net_tco2/1e4).round(0).tolist()}만 t, 요금 {q.total_eok.round(0).tolist()}억, 가정한 분포에서 순 탄소가 0보다 큰 표본 비율 {(Y.net_tco2>0).mean():.0%}")
         if dist == "uniform":
-            print("  순 탄소 기여도(%):", rank_corr(X, Y, "net_tco2").round(1).head(4).to_dict())
-            print("  요금 기여도(%):", rank_corr(X, Y, "total_eok").round(1).head(4).to_dict())
+            print("  순 탄소 순위상관 점수(%, 분산 기여도 아님):", rank_corr(X, Y, "net_tco2").round(1).head(4).to_dict())
+            print("  요금 순위상관 점수(%, 분산 기여도 아님):", rank_corr(X, Y, "total_eok").round(1).head(4).to_dict())
 
 # 2-2. 수소환원(S4, 포항 실증 30만 t) 기준: 전기로·자체 발전 감소 없이 수소환원 변수만 흔든다
 b4, t4 = tornado(Scenario(eaf_mt=0, h2_mt=0.3), drop=("eaf_mt", "h2_mt", "eaf_kwh_t", "eaf_util", "selfgen_cut", "bf_replace", "bf_tco2_t", "eaf_direct_t"))
@@ -46,7 +46,7 @@ print(f"\n[토네이도 S4] 기준 순 저감 {-b4['net_tco2']/1e4:.1f}만 t, �
 for g in (0.0, 0.5, 1.0):  # 무탄소 전력 비율은 불확실성이 아니라 정책 선택이라 시나리오 축으로 나눈다
     X4, Y4 = monte_carlo(fixed={"eaf_mt": 0.0, "h2_mt": 0.3, "selfgen_cut": 0.0, "bf_replace": 0.0, "h2_green": g}, dist="uniform")
     q = (-Y4.net_tco2 / 1e4).quantile([0.05, 0.5, 0.95]).round(1).tolist()
-    print(f"[몬테카를로 S4, 무탄소 {g:.0%}] 순 저감 5/50/95% {q}만 t, 배출이 오히려 늘 확률 {(Y4.net_tco2 >= 0).mean():.0%}, 기여도(%):", rank_corr(X4, Y4, "net_tco2").round(1).head(4).to_dict())
+    print(f"[몬테카를로 S4, 무탄소 {g:.0%}] 순 저감 5/50/95% {q}만 t, 가정한 분포에서 배출이 늘어난 표본 비율 {(Y4.net_tco2 >= 0).mean():.0%}, 순위상관 점수(%):", rank_corr(X4, Y4, "net_tco2").round(1).head(4).to_dict())
 
 # 3. 그림
 fig, ax = plt.subplots(1, 3, figsize=(18, 5))

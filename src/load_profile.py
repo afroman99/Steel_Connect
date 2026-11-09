@@ -63,7 +63,10 @@ def annual_cost(d, band, reform=False, kwh=None, plan="A2", weekend=True):
 def shift_peak(d, band, f):
     """shift_peak = 최대부하 이동. 최대부하 시간 사용량의 f 비율을 같은 날 경부하 시간으로 옮긴 사용량(kWh)을 돌려준다."""
     removed = d.kwh.where(band == "최", 0) * f
-    moved = removed.groupby(d.date).transform("sum") / (band == "경").groupby(d.date).transform("sum").clip(lower=1)
+    n_off = (band == "경").groupby(d.date).transform("sum")
+    if ((removed.groupby(d.date).transform("sum") > 0) & (n_off == 0)).any():
+        raise ValueError("경부하 시간이 없는 날에는 최대부하를 옮길 수 없음 (에너지 보존 불가)")
+    moved = removed.groupby(d.date).transform("sum") / n_off.clip(lower=1)
     return d.kwh - removed + moved.where(band == "경", 0)
 
 

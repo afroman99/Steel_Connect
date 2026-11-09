@@ -1,4 +1,4 @@
-"""시뮬레이터 민감도·불확실성 분석 함수: 토네이도(한 변수씩), 몬테카를로(전 변수 동시), 순위상관 기여도.
+"""시뮬레이터 민감도·불확실성 분석 함수: 토네이도(한 변수씩), 몬테카를로(전 변수 동시), 순위상관 점수. 몬테카를로의 비율은 가정한 분포(허용 범위 독립 추출)에서의 표본 비율이지 현실의 확률이 아니다.
 자체 발전 감소율(selfgen_cut)은 근거가 약하고 범위가 결과를 지배하므로 불확실성이 아니라 시나리오 축으로 보고 fixed로 고정해 비교한다."""
 
 from dataclasses import asdict
@@ -56,6 +56,6 @@ def monte_carlo(n=10000, seed=0, fixed=None, dist="uniform"):
 
 
 def rank_corr(X, Y, metric):
-    """rank_corr = 순위상관 기여도(근사). 수치 변수별 스피어만 상관의 제곱을 합 100%로 환산(고정한 변수는 제외). 정밀한 분산분해(Sobol)가 아니라 순서를 보는 용도."""
+    """rank_corr = 순위상관 점수(정규화). 수치 변수별 스피어만 상관의 제곱을 합 100%로 맞춘 값(고정한 변수·범주형 변수 제외). 분산 기여도가 아니라 영향 순서를 보는 용도."""
     s = pd.Series({k: X[k].corr(Y[metric], method="spearman") for k in RANGE if X[k].nunique() > 1}).pow(2).fillna(0)
     return (s / s.sum() * 100).sort_values(ascending=False)

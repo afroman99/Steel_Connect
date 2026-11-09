@@ -19,12 +19,12 @@ from src.simulator import breakeven_grid, green_needed
 # fmt: off
 setup_korean_font()
 BE, BE_PAPER = breakeven_grid(), breakeven_grid(3720, 1.688)  # 손익분기: 포스코 평균 고로 1.99 기준 / 논문 EU 고로 기준
-KINDS = ("정체", "14년 추세", "최근 5년 속도")
+KINDS = ("정체", "14년 추세", "2018 기준 하락 속도")
 
 # 1. 한국 전력은 깨끗해지고 있나 (소비단 배출계수 2010~2023)
-print(f"[검산] 2021~23 평균 {GRID.loc[2021:2023].mean():.4f} (공식 0.4330), 2018 정점 {GRID.loc[2018]:.4f} -> 2023 {GRID.loc[2023]:.4f} ({(GRID.loc[2023]/GRID.loc[2018]-1)*100:.0f}%)")
+print(f"[검산] 2021~23 평균 {GRID.loc[2021:2023].mean():.4f} (공식 0.4330), 2018(온실가스 배출 정점 연도) {GRID.loc[2018]:.4f} -> 2023 {GRID.loc[2023]:.4f} ({(GRID.loc[2023]/GRID.loc[2018]-1)*100:.0f}%)")
 for st in (2010, 2018):
-    t = trend(st); print(f"[추세 {st}~2023, 점 {t['n']}개] 연 {t['slope']:+.4f} (95% 구간 {t['lo']:+.4f} ~ {t['hi']:+.4f})")
+    t = trend(st); print(f"[추세 {st}~2023, 점 {t['n']}개] 연 {t['slope']:+.4f} (회귀 가정하 기울기 95% 구간 {t['lo']:+.4f} ~ {t['hi']:+.4f}, 예측구간 아님)")
 
 # 2. 시나리오: 수소환원 실증(2028)·상용화 기술(2030) 시점의 전력배출계수, 그리고 손익분기와의 거리
 print(f"\n[손익분기] 고로 1.99 기준 {BE:.3f}, 논문 조건 {BE_PAPER:.3f}. 지금(2023) {GRID.loc[2023]:.4f}는 둘 다 아래")

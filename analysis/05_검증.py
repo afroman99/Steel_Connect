@@ -1,4 +1,5 @@
 """시뮬레이터 검증 (처음부터 끝까지 실행): 내부 정합성 assert + 외부 수치 대조.
+주의: assert 통과는 계산이 서로 맞는지(환산·비례·합산·입력 거절)를 확인한 것이며, 입력 가정과 출처의 외부 타당성을 보증하지 않는다. 일부 기대값(S1 요금 등)은 현재 구현값을 고정한 회귀 확인이다.
 실행: 프로젝트 루트에서 python3 analysis/05_검증.py  (실패하면 AssertionError)
 """
 
@@ -102,6 +103,12 @@ for bad in (lambda: sweep_green(0.5, 50e4, "plan", [1]), lambda: sweep_green(0.5
 assert call_tool("sweep_green", {"h2_output_mt": 0.5, "target_abate_t": 50e4, "vary": "green_supply_twh", "values": [0, 0.5]})["status"] == "ok" and call_tool("sweep_green", {"vary": "x"})["status"] == "ask", "도구 래퍼 sweep"
 from src.assistant_tools import TOOL_SCHEMAS, TOOLS, VARS
 assert set(TOOL_SCHEMAS) == set(TOOLS) and set(TOOL_SCHEMAS["simulate"]["properties"]) == set(VARS), "도구 스키마와 도구 목록·변수 일치"
+import pandas as pd
+from src.load_profile import shift_peak
+tiny = pd.DataFrame(dict(date=["a"] * 4, kwh=[1.0] * 4))
+try: shift_peak(tiny, pd.Series(["최", "최", "중", "중"]), 0.5); raise AssertionError("경부하 없는 날은 거절돼야 함")
+except ValueError: pass
+assert near(shift_peak(u, u.band, 0.5).sum(), u.kwh.sum(), rel=1e-9), "실제 UCI에서 최대부하 이동은 에너지를 보존"
 print("[내부 정합성] 통과")
 
 # 2. 외부 수치 대조 (일치 여부와 차이를 그대로 보고)

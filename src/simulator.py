@@ -108,7 +108,8 @@ def avg_price(rule, plan="A2"):
 
 
 def simulate(**kw):
-    """simulate = 모의실험. 시나리오 변수를 받아 추가 전력(TWh)·탄소(tCO2, Scope 2 증가와 Scope 1 감축)·요금(억 원)을 계산해 dict로 돌려준다."""
+    """simulate = 모의실험. 시나리오 변수를 받아 추가 전력(TWh)·탄소(tCO2, Scope 2 증가와 Scope 1 감축)·요금(억 원)을 계산해 dict로 돌려준다.
+    scope2_after_t·scope1_after_t는 2024 공시 기준선에 증분을 더한 혼합 기준 참고값이다(같은 연도 재산정 배출량이 아님)."""
     s = Scenario(**kw)
     check_range(s)
     out_mt = s.eaf_mt * s.eaf_util                                       # 전기로 실제 생산량 (백만 t)
