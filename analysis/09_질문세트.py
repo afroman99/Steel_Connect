@@ -1,4 +1,4 @@
-"""평가용 질문 세트 30개와 기대 답 (처음부터 끝까지 실행). 정상 16 · 정보 부족 7 · 범위 밖/근거 없음 7.
+"""평가용 질문 세트 33개와 기대 답 (처음부터 끝까지 실행). 정상 18 · 정보 부족 8 · 범위 밖/근거 없음 7.
 기대 답 = 시뮬레이터·역산 함수 결과. hand가 있는 항목은 시뮬레이터를 쓰지 않은 손계산 식으로 한 번 더 대조한다(독립 검증).
 어시스턴트 평가는 이 QUESTIONS를 import해서 쓴다: 숫자 일치(정상), 되묻기(정보 부족), 거절(범위 밖) 여부를 본다.
 규칙: 규모(생산량)나 목표가 없으면 되묻는다. 가동률·요금제 같은 보조 변수는 기본값을 쓰되 답변에 가정으로 밝힌다.
@@ -9,13 +9,14 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from src.simulator import breakeven_grid, simulate
-from src.target import min_green, required_output
+from src.target import close_gap, min_green, required_output
 
 # fmt: off
 GF, E, H = 0.4173, 450 / 1000, 3.72  # 계수, 전기로 MWh/t, 수소환원 MWh/t
 S1 = dict(eaf_mt=2.5, eaf_util=0.7)  # 광양 전기로 기본(simulate 기본값과 같음)
 c = lambda **k: simulate(**k)["carbon"]; p = lambda **k: simulate(**k)["power"]; k_ = lambda **k: simulate(**k)["cost"]
 mg = lambda **k: min_green(0.5, 50e4, **k)
+cg = close_gap(0.5, 50e4, 0.3); lv = lambda n: next(x for x in cg['levers'] if x['lever'] == n)['needed']  # 부족 레버 역산(수소환원 50만 t, 목표 50만 t, 확보 0.3 TWh)
 G = 1 - (1.99 - 1.0) / (H * GF)  # 수소환원 0.5 Mt, 순 저감 1.0 t/t일 때 필요한 무탄소 비율(손계산)
 N = [  # (id, 질문, 기대 값 dict, 손계산 dict 또는 None)
  ("N01", "광양 전기로 250만 t을 가동률 70%로 돌리면 추가로 필요한 전력은 몇 TWh야?", dict(add_twh=p()["add_twh"]), dict(add_twh=2.5 * 0.7 * E)),
@@ -34,6 +35,8 @@ N = [  # (id, 질문, 기대 값 dict, 손계산 dict 또는 None)
  ("N15", "배출권 가격을 t당 2만 원으로 가정하면 S1(전기로 70%)의 순 저감 참고 가치는 몇 억 원이야?", dict(ets_value_eok=c(ets_price=2e4)["ets_value_eok"]), dict(ets_value_eok=(1.75e6 * (1.99 - 0.08) - 1.75e6 * E * GF) * 2e4 / 1e8)),
  ("N16", "포스코가 말한 순감축 1.4 t/t를 그대로 쓰면 S1 순 저감은 몇 tCO2야?", dict(abate_tco2=c(eaf_basis="posco_net")["abate_tco2"]), dict(abate_tco2=1.75e6 * 1.4)),
  ("N17", "2026년 요금 개편 전(2025년 시간대·단가)으로 계산하면 S1 요금은 연 몇 억 원이야?", dict(total_eok=k_(band_rule="2025")["total_eok"]), None),
+ ("N18", "수소환원 50만 t/년으로 순 저감 50만 t을 하려는데 무탄소 전력을 0.3 TWh만 확보했어. 부족분을 메우려면 확보량을 얼마로 늘려야 해?", dict(green_supply_twh=lv("green_supply_twh")), dict(green_supply_twh=G * 0.5 * H)),
+ ("N19", "N18에서 확보량을 0.3 TWh에서 늘릴 수 없다면, 순 저감 목표를 얼마까지 낮춰야 부족이 없어?", dict(target_abate_t=lv("target_abate_t")), dict(target_abate_t=0.5e6 * (1.99 - H * GF) + 0.3e6 * GF)),
 ]
 M = [  # 정보 부족: 되물어야 하는 항목
  ("M01", "수소환원을 하면 탄소가 얼마나 줄어?", "생산 규모(h2_mt)"),
@@ -43,6 +46,7 @@ M = [  # 정보 부족: 되물어야 하는 항목
  ("M05", "전력 요금이 오르면 어떻게 돼?", "변동률과 대상 시나리오"),
  ("M06", "전기로랑 수소환원 중 뭐가 더 나아?", "비교 기준(같은 생산량 또는 같은 감축 목표)과 규모"),
  ("M07", "배출권으로 환산하면 가치가 얼마야?", "배출권 가격 가정(ets_price)과 시나리오"),
+ ("M08", "무탄소 전력이 부족하면 뭘 바꿔야 해?", "수소환원 생산량, 목표 순 저감량, 확보 가능한 무탄소 전력량(green_supply_twh)"),
 ]
 R = [  # 범위 밖/근거 없음: 거절. kw가 있으면 simulate가 ValueError를 내는지 코드로 검증
  ("R01", "2035년 한국 전력배출계수는 정확히 얼마가 돼?", None, "미래 예측 불가(가정 경로만 제시)"),
