@@ -100,6 +100,8 @@ for bad in (lambda: sweep_green(0.5, 50e4, "plan", [1]), lambda: sweep_green(0.5
     try: bad(); raise AssertionError("거절돼야 함")
     except ValueError: pass
 assert call_tool("sweep_green", {"h2_output_mt": 0.5, "target_abate_t": 50e4, "vary": "green_supply_twh", "values": [0, 0.5]})["status"] == "ok" and call_tool("sweep_green", {"vary": "x"})["status"] == "ask", "도구 래퍼 sweep"
+from src.assistant_tools import TOOL_SCHEMAS, TOOLS, VARS
+assert set(TOOL_SCHEMAS) == set(TOOLS) and set(TOOL_SCHEMAS["simulate"]["properties"]) == set(VARS), "도구 스키마와 도구 목록·변수 일치"
 print("[내부 정합성] 통과")
 
 # 2. 외부 수치 대조 (일치 여부와 차이를 그대로 보고)

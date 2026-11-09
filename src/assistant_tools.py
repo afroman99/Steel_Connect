@@ -5,8 +5,8 @@ call_tool(이름, 인자 dict) -> {"status": "ok"|"ask"|"refuse", ...}. 어시�
 
 from dataclasses import fields
 
-from src.simulator import SOURCES, Scenario, breakeven_grid, simulate
-from src.target import compare_paths, min_green, required_output, sweep_green
+from src.simulator import PLANS, RANGE, SOURCES, Scenario, breakeven_grid, simulate
+from src.target import SWEEP_VARS, compare_paths, min_green, required_output, sweep_green
 
 # fmt: off
 VARS = [f.name for f in fields(Scenario)]
@@ -19,6 +19,28 @@ TOOLS = {  # LLM 도구 정의용 설명. 변수 의미·단위·허용 범위�
  "compare_paths": "같은 목표 순 저감을 전기로·수소환원(전력망·무탄소 50%·100%)으로 달성할 때 비교.",
  "breakeven_grid": "수소환원이 고로보다 배출을 늘리기 시작하는 전력배출계수. 인자: h2_kwh_t, bf_t, resid_t.",
 }
+_ENUM = {"band_rule": ["2025", "B"], "plan": list(PLANS), "eaf_basis": ["bottom_up", "posco_net"]}
+_NUM = lambda d: dict(type="number", description=d)
+_SIM = {f.name: (dict(type="string", enum=_ENUM[f.name]) if f.name in _ENUM else dict(type="number", **({"description": f"허용 범위 {RANGE[f.name][0]}~{RANGE[f.name][1]}"} if f.name in RANGE else {}))) for f in fields(Scenario)}
+TOOL_SCHEMAS = {  # JSON Schema(입력 형식). 어떤 LLM SDK에서든 도구 정의의 input_schema로 쓸 수 있다
+ "simulate": dict(type="object", properties=_SIM),
+ "required_output": dict(type="object", required=["target_abate_t", "path"], properties=dict(target_abate_t=_NUM("목표 순 저감 tCO2/년"), path=dict(type="string", enum=["eaf", "h2"]),
+                         h2_green=_NUM("수소환원 무탄소 전력 비율 0~1"), grid_factor=_NUM("전력배출계수"), plan=_SIM["plan"], ets_price=_NUM("배출권 가격 가정 원/t"))),
+ "min_green": dict(type="object", required=["h2_output_mt", "target_abate_t"], properties=dict(h2_output_mt=_NUM("수소환원 연 생산량 백만 t"), target_abate_t=_NUM("목표 순 저감 tCO2/년"),
+                   green_supply_twh=_NUM("확보 가능한 무탄소 전력 TWh(사용자 가정)"), h2_kwh_t=_NUM("전력 원단위 kWh/t"), grid_factor=_NUM("전력배출계수"), h2_resid_t=_NUM("잔여 직접 배출 t/t"))),
+ "sweep_green": dict(type="object", required=["h2_output_mt", "target_abate_t", "vary", "values"], properties=dict(h2_output_mt=_NUM("백만 t"), target_abate_t=_NUM("tCO2/년"), vary=dict(type="string", enum=list(SWEEP_VARS)),
+                     values=dict(type="array", items=dict(type="number"), description="vary에 넣을 값 목록(최대 50)"), green_supply_twh=_NUM("TWh"))),
+ "compare_paths": dict(type="object", required=["target_abate_t"], properties=dict(target_abate_t=_NUM("목표 순 저감 tCO2/년"), grid_factor=_NUM("전력배출계수"))),
+ "breakeven_grid": dict(type="object", properties=dict(h2_kwh_t=_NUM("kWh/t"), bf_t=_NUM("고로 배출 t/t"), resid_t=_NUM("잔여 배출 t/t"))),
+}
+SYSTEM_PROMPT = """너는 제철소 저탄소 전환(전기로·수소환원제철) 시나리오 어시스턴트다. 모든 숫자는 도구로 계산하고, 직접 계산하거나 추정하지 않는다.
+- 도구 결과 status가 ask면 missing을 사용자에게 한 번에 되묻는다. 추측해서 채우지 않는다. 생산 규모나 목표 감축량이 없으면 반드시 묻는다.
+- refuse면 reason을 설명하고 답변을 유보한다. 범위 밖 값을 임의로 바꿔 다시 계산하지 않는다.
+- ok면 result의 숫자만 인용한다. defaults_used(사용자가 정하지 않아 기본값으로 계산한 변수)는 가정으로 밝히고, sources 중 쓴 것을 출처로 붙인다.
+- 도구가 없는 질문은 도구를 부르지 않고 근거 부족으로 거절한다: 미래 예측, 사내 실제 데이터, 투자비·회수기간, 실제 배출권 회피액, 미래 요금 인상률, 시간대별 공급으로 생산이 멈추는지 여부.
+  실제 회피액 질문에는 가정 가격(ets_price)을 주면 참고 가치는 계산할 수 있다고 안내한다.
+- 항상 밝힌다: 조건부 시나리오이며 예측이 아니다. 부족분은 연간 전력량 기준이라 시간대별 공급·저장은 반영하지 않았고 생산 지속 여부를 판단하지 않는다. 요금은 전력 요금만이다. 배출권 가치는 참고 가치다.
+- 한국어로 답한다. 숫자에는 단위를 붙이고, 전문용어 뒤에는 짧은 설명을 붙인다."""
 FUNCS = {"simulate": simulate, "required_output": required_output, "min_green": min_green, "sweep_green": sweep_green, "compare_paths": compare_paths, "breakeven_grid": breakeven_grid}
 
 
