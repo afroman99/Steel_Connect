@@ -12,7 +12,7 @@ from src.assistant_tools import SYSTEM_PROMPT
 
 # fmt: off
 CMD_RULE = "도구는 Bash로 `python3 -m src.assistant_cli 도구이름 '{JSON}'` 형태만 호출할 수 있다. 결과는 JSON 한 줄이다."
-MODEL = "sonnet"  # 사용자 결정(한도 절약). 별칭 sonnet = 현재 최신 Sonnet
+MODEL = "claude-sonnet-5-5"  # 사용자 결정(한도 절약): Sonnet 5.5로 고정. 별칭(sonnet)은 버전이 바뀔 수 있어 쓰지 않는다
 ALLOWED = "Bash(python3 -m src.assistant_cli:*)"  # 이 명령만 허용. 파일 읽기·수정, 다른 명령은 막는다
 
 
