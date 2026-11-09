@@ -97,7 +97,7 @@ def check_range(s):
 
 @cache
 def avg_price(rule, plan="A2"):
-    """avg_price = 평균 요금. 24시간 일정 부하의 전력량요금 평균(원/kWh). UCI 달력(분석 결과)의 계절·시간대 비중으로 가중하고, 개편 규칙(B)이면 단가 변화도 반영. B는 공식 시간표로 직접 계산한 값과 일치 확인."""
+    """avg_price = 평균 요금. 24시간 일정 부하의 전력량요금 평균(원/kWh). UCI 달력(분석 결과)의 계절·시간대 비중으로 가중하고, 개편 규칙(B)이면 단가 변화와 봄·가을 주말 낮 50% 할인도 반영. B는 공식 시간표로 직접 계산한 값과 일치 확인."""
     from src.load_profile import (  # 순환 import를 피하려고 함수 안에서 불러옴
         load_uci,
         price,

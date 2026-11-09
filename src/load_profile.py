@@ -33,26 +33,30 @@ def baseload(d, hours=range(0, 6)):
     return d[(d.day == "평일") & d.h.isin(hours)].kw.median()
 
 
-def reform_band(d, mid=range(9, 15), peak=range(18, 21)):
-    """reform_band = 개편 후 요금시간대. 휴일이 아닌 날 mid 시각은 중간부하, peak 시각은 최대부하로 바꾼 band를 돌려준다."""
+def reform_band(d, mid=(11, 13, 14), peak=range(18, 21)):
+    """reform_band = 개편 후 요금시간대. 휴일이 아닌 날 mid 시각은 중간부하, peak 시각은 최대부하로 바꾼 band를 돌려준다. 기본값은 2026 개편 확정(11~12·13~15시 중간, 18~21시 최대)."""
     b, work = d.band.copy(), d.day != "휴일"
     b[work & d.h.isin(mid)] = "중"
     b[work & d.h.isin(peak)] = "최"
     return b
 
 
-def price(d, band, reform=False, plan="A2"):
-    """price = 단가. 행마다 (계절, 시간대)에 맞는 전력량요금(원/kWh). reform=True면 2026 개편 단가 변화를 더한다. plan 기본 A2는 UCI 사업장(수백 kW)에 맞는 고압A 선택Ⅱ."""
+def price(d, band, reform=False, plan="A2", weekend=True):
+    """price = 단가. 행마다 (계절, 시간대)에 맞는 전력량요금(원/kWh). reform=True면 2026 개편 단가 변화를 더하고, weekend=True면 봄·가을(3~5·9~10월) 토·일·공휴일 11~14시 50% 할인도 적용한다
+    (토요일은 중간부하, 일·공휴일은 경부하 단가의 50%. 한전 안내문 2026-03-16). plan 기본 A2는 UCI 사업장(수백 kW)에 맞는 고압A 선택Ⅱ."""
     tariff = PLANS[plan][1]
     table = {(s, b): tariff[s][i] + REFORM[s][i] * reform for s in tariff for b, i in IDX.items()}
-    return pd.Series(list(zip(d.sea, band)), index=d.index).map(table)
+    p = pd.Series(list(zip(d.sea, band)), index=d.index).map(table)
+    if reform and weekend:
+        p = p.where(~((d.sea == "봄가을") & d.day.isin(["토", "휴일"]) & d.h.isin([11, 12, 13])), p * 0.5)
+    return p
 
 
-def annual_cost(d, band, reform=False, kwh=None, plan="A2"):
+def annual_cost(d, band, reform=False, kwh=None, plan="A2", weekend=True):
     """annual_cost = 연간 요금. 전력량요금 + 기본요금(최대수요 kW x 기본요금 단가 x 12). 한 해 자료의 연 최대를 12개월 모두에 적용(정상상태 가정, 실제는 직전 12개월 최대).
     kwh를 주면 그 사용량으로 계산(부하 이동 후 등). 기후환경·연료비조정요금·기금은 포함하지 않음."""
     kwh = d.kwh if kwh is None else kwh
-    energy, basic = (kwh * price(d, band, reform, plan)).sum(), kwh.max() * 4 * PLANS[plan][0] * 12
+    energy, basic = (kwh * price(d, band, reform, plan, weekend)).sum(), kwh.max() * 4 * PLANS[plan][0] * 12
     return dict(energy=energy, basic=basic, total=energy + basic, avg=(energy + basic) / kwh.sum())
 
 

@@ -47,7 +47,7 @@ assert s4g["carbon"]["add_tco2"] == 0, "무탄소 100%면 Scope 2 증가 0"
 assert near(s4["carbon"]["scope1_cut_tco2"], 0.21e6 * 1.99), "S4 Scope 1 감축 = 21만 t x 1.99"
 assert near(s5["power"]["add_twh"], s1["power"]["add_twh"] + s4["power"]["add_twh"]) and near(s5["carbon"]["abate_tco2"], s1["carbon"]["abate_tco2"] + s4["carbon"]["abate_tco2"]), "S5 = S1 + S4 (전력·순 저감 덧셈)"
 assert near(s1o["cost"]["total_eok"], 1413.80, 1e-4), "개편 전(2025) S1 요금 회귀"
-assert near(s1["cost"]["total_eok"], 1409.39, 1e-4), "개편 후(B) S1 요금: 2025보다 낮아야 함"
+assert near(s1["cost"]["total_eok"], 1401.78, 1e-4), "개편 후(B, 주말 낮 할인 포함) S1 요금 회귀"
 assert s1["cost"]["total_eok"] < s1o["cost"]["total_eok"], "개편 후가 더 싸다"
 assert abs(breakeven_grid(3720, 1.688) - 0.456) < 0.005, "Bhaskar 2020 논문의 손익분기 0.456 재현"
 assert near(S(eaf_mt=0, h2_mt=1, h2_util=1)["carbon"]["abate_tco2"], 1e6 * (1.99 - 3.72 * 0.4173)), "수소환원 1Mt 순 저감 = 1.99 - 3.72 x 0.4173 (t/t)"
@@ -84,6 +84,14 @@ for bad in (5000, 40000, True, "2만"):
 from src.assistant_tools import call_tool
 assert call_tool("simulate", {})["status"] == "ask" and call_tool("simulate", {"eaf_mt": 1, "eaf_util": 2})["status"] == "refuse" and call_tool("simulate", {"eaf_mt": 1, "x": 1})["status"] == "refuse" and call_tool("nope")["status"] == "refuse", "도구 래퍼: 되묻기·거절"
 assert call_tool("simulate", {"eaf_mt": 1})["status"] == "ok" and "eaf_util" in call_tool("simulate", {"eaf_mt": 1})["defaults_used"], "기본값 사용 변수 표시"
+from src.load_profile import load_uci, price, reform_band
+from src.simulator import DATA
+u = load_uci(DATA); ub = reform_band(u, mid=(11, 13, 14)); pr = price(u, ub, True, "A2")
+pick = lambda sea, day, h: pr[(u.sea == sea) & (u.day == day) & (u.h == h)].iloc[0]
+assert near(pick("봄가을", "휴일", 12), 0.5 * (110.9 + 5.1)), "봄가을 일·공휴일 11~14시: 경부하 단가(개편 후)의 50%"
+assert near(pick("봄가을", "토", 12), 0.5 * 133.4), "봄가을 토요일 11~14시: 중간부하 단가의 50%"
+assert near(pick("봄가을", "휴일", 14), 116.0) and near(pick("여름", "휴일", 12), 116.0 - 5.1 + 5.1) and near(pick("봄가을", "평일", 12), 133.4), "할인은 봄가을 주말·공휴일 11~14시에만"
+assert near(price(u, ub, True, "A2", weekend=False)[(u.sea == "봄가을") & (u.day == "휴일") & (u.h == 12)].iloc[0], 116.0), "weekend=False면 할인 없음"
 print("[내부 정합성] 통과")
 
 # 2. 외부 수치 대조 (일치 여부와 차이를 그대로 보고)
