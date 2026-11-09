@@ -1,9 +1,9 @@
-"""웹 화면 v0.2: 저탄소 제철 전력 계산기. 숫자는 src/assistant_tools.call_tool이 내고, 질문은 LLM 어시스턴트(src/assistant.py)가 해석한다.
+"""웹 화면 v0.2: 제철공정의 저탄소 전환을 돕는 AI 어시스턴트. 숫자는 src/assistant_tools.call_tool이 내고, 질문은 LLM 어시스턴트(src/assistant.py)가 해석한다.
 
 실행: 프로젝트 루트에서 python -m src.web  -> 브라우저로 http://127.0.0.1:8000  (--port, --host 0.0.0.0 으로 바꿈)
 API: POST /api/calc {tool, args} -> call_tool 결과 그대로({status: ok|ask|refuse, ...}, AI 없이) | POST /api/ask {question, session} -> {answer, calls, session}
      GET /api/tools -> 도구 설명·입력 형식·허용 범위(화면 슬라이더 범위용) | GET /api/status -> AI 연결 여부
-주의: 표준 라이브러리 http.server만 쓴다(새 패키지 없음). AI 연결이 없어도 화면의 계산기는 동작한다. 화면(web/index.html)은 숫자를 다시 계산하지 않는다.
+주의: 표준 라이브러리 http.server만 쓴다(새 패키지 없음). 화면(web/index.html)은 질문 하나만 보여 주고, 답변에 계산 결과가 있을 때만 오른쪽 결과 창을 연다. 숫자를 다시 계산하지 않는다. /api/calc는 AI 없이도 동작한다(결과 창의 '다시 계산').
 공개 주소로 열 때 걸려 있는 보호는 IP당 질문 횟수 제한(RATE)뿐이다. 비밀번호는 앞단(프록시 등)에서 건다. 대화 기록은 서버 메모리에만 두고 재시작하면 사라진다.
 """
 
@@ -113,20 +113,20 @@ class Handler(BaseHTTPRequestHandler):
             if not 0 < len(q) <= MAX_Q:
                 return self.send(400, {"error": f"질문은 1~{MAX_Q}자로 입력하세요"})
             if not llm_status():
-                return self.send(503, {"error": "AI가 연결되어 있지 않습니다. 오른쪽 계산기는 AI 없이 쓸 수 있습니다 (연결 방법: src/assistant.py 맨 위 설명)"})
+                return self.send(503, {"error": "AI가 연결돼 있지 않아 답할 수 없습니다. 연결 방법은 src/assistant.py 맨 위 설명을 보세요"})
             if not allowed(self.client_address[0]):
                 return self.send(429, {"error": f"질문은 1시간에 {RATE[0]}번까지입니다. 잠시 뒤 다시 보내세요"})
             try:
                 return self.send(200, answer(q, str(body.get("session") or uuid.uuid4())[:64]))
             except Exception as e:
-                return self.send(502, {"error": f"AI 연결 실패 ({type(e).__name__}: {e}). 오른쪽 계산기는 AI 없이 쓸 수 있습니다"})
+                return self.send(502, {"error": f"AI에 연결하지 못했습니다 ({type(e).__name__}: {e})"})
         self.send(404, {"error": f"{self.path}: 없는 주소"})
 
 
 if __name__ == "__main__":
-    p = argparse.ArgumentParser(description="저탄소 제철 전력 계산기 웹 화면")
+    p = argparse.ArgumentParser(description="제철공정의 저탄소 전환을 돕는 AI 어시스턴트 웹 화면")
     p.add_argument("--host", default="127.0.0.1")
     p.add_argument("--port", type=int, default=int(os.environ.get("PORT", 8000)))
     a = p.parse_args()
-    print(f"http://{a.host}:{a.port} 에서 실행 중 (AI 연결: {llm_status() or '없음, 계산기만 동작'}). Ctrl+C로 끝냅니다.")
+    print(f"http://{a.host}:{a.port} 에서 실행 중 (AI 연결: {llm_status() or '없음, 질문에 답할 수 없음'}). Ctrl+C로 끝냅니다.")
     ThreadingHTTPServer((a.host, a.port), Handler).serve_forever()

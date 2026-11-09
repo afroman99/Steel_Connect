@@ -3,45 +3,53 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>저탄소 제철 전력 계산기 | Steel_Connect</title>
+<title>제철공정의 저탄소 전환을 돕는 AI 어시스턴트 | Steel_Connect</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
+  /* 색은 PANTONE Coated 색상의 공식 sRGB 근사값. 화면·인쇄에 따라 실제 팬톤 칩과 다르게 보일 수 있다 */
   :root {
-    --steel: #DCE1E6;   /* 바탕: 냉연 강판 */
-    --plate: #F4F6F8;   /* 결과 시트 */
-    --ink: #14202B;
-    --slate: #586676;
-    --rule: #C2CAD2;
-    --grid: #4A5563;    /* 전력망 전력 */
-    --clean: #0F7E6E;   /* 무탄소 전력 */
-    --need: #E9A90B;    /* 부족분 */
-    --alert: #A3261B;
+    --steel: #F9F9F9;   /* 바탕: PANTONE Cool Gray 1 C(#D9D9D6)를 15% 농도로 옅게 쓴 틴트 */
+    --plate: #FFFFFF;   /* 결과 시트 */
+    --ink: #041E42;     /* 글자·상단 띠·버튼: PANTONE 282 C (남색) */
+    --accent: #004C97;  /* 선택된 탭·포커스·슬라이더: PANTONE 2945 C */
+    --slate: #53565A;   /* 보조 글자: PANTONE Cool Gray 11 C */
+    --rule: #C8C9C7;    /* 구분선: PANTONE Cool Gray 3 C */
+    --grid: #425563;    /* 전력망 전력: PANTONE 7545 C */
+    --clean: #007749;   /* 무탄소 전력: PANTONE 3415 C */
+    --need: #FFB81C;    /* 부족분: PANTONE 1235 C */
+    --alert: #C8102E;   /* 경고·거절: PANTONE 186 C */
     --font: "IBM Plex Sans KR", "Malgun Gothic", "Apple SD Gothic Neo", sans-serif;
   }
   * { box-sizing: border-box; }
   html { -webkit-text-size-adjust: 100%; }
   body { margin: 0; background: var(--steel); color: var(--ink); font: 400 16px/1.65 var(--font); font-variant-numeric: tabular-nums; word-break: keep-all; overflow-wrap: anywhere; }
   button, input, textarea, select { font: inherit; color: inherit; }
-  :focus-visible { outline: 3px solid var(--clean); outline-offset: 2px; }
+  :focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
   .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
-  .top { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: .5rem 1.5rem;
-         max-width: 1360px; margin: 0 auto; padding: 1.25rem clamp(1rem, 4vw, 3rem) 0; }
+  .top { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: .5rem 1.5rem; background: var(--ink); color: #fff;
+         padding: 1rem max(clamp(1rem, 4vw, 3rem), calc((100% - 1360px) / 2 + clamp(1rem, 4vw, 3rem))); border-bottom: 4px solid var(--accent); }
   .top h1 { margin: 0; font-size: 1.0625rem; font-weight: 700; }
-  .top h1 small { font-weight: 400; color: var(--slate); margin-left: .5rem; }
-  .status { display: flex; align-items: center; gap: .5rem; margin: 0; font-size: .875rem; color: var(--slate); }
-  .status::before { content: ""; width: .5rem; height: .5rem; border-radius: 50%; background: var(--rule); }
-  .status.on::before { background: var(--clean); }
+  .top h1 small { font-weight: 400; color: var(--rule); margin-left: .5rem; }
+  .status { display: flex; align-items: center; gap: .5rem; margin: 0; font-size: .875rem; color: var(--rule); }
+  .status::before { content: ""; width: .5rem; height: .5rem; border-radius: 50%; background: var(--slate); }
+  .status.on::before { background: var(--clean); box-shadow: 0 0 0 1px #fff; }
 
-  main { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); gap: clamp(1.5rem, 4vw, 3.5rem);
-         max-width: 1360px; margin: 0 auto; padding: clamp(1.5rem, 4vw, 3rem) clamp(1rem, 4vw, 3rem) 4rem; align-items: start; }
-  @media (max-width: 920px) { main { grid-template-columns: minmax(0, 1fr); } }
+  /* 처음엔 질문 한 칸만 가운데. 답변에 계산 결과가 있으면(body.has-result) 오른쪽에 결과 창이 열린다 */
+  main { display: grid; grid-template-columns: minmax(0, 46rem); justify-content: center; gap: clamp(1.5rem, 4vw, 3.5rem);
+         max-width: 1360px; min-height: calc(100vh - 12rem); margin: 0 auto; padding: clamp(1.5rem, 4vw, 3rem) clamp(1rem, 4vw, 3rem) 2rem; align-items: start; }
+  .has-result main { grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); justify-content: stretch; }
+  @media (max-width: 920px) { .has-result main { grid-template-columns: minmax(0, 1fr); } }
 
   /* 질문 */
+  .ask { display: flex; flex-direction: column; min-height: 100%; }
+  body:not(.chatting) .ask { justify-content: center; padding-top: clamp(2rem, 12vh, 8rem); }
+  .chatting .lede, .chatting .examples { display: none; }
   .lede { margin: 0 0 1.5rem; font-size: clamp(1.75rem, 3.4vw, 2.625rem); line-height: 1.25; font-weight: 600; letter-spacing: -.02em; max-width: 16em; }
   .ask form { background: #fff; border: 1px solid var(--rule); border-radius: 6px; padding: .75rem .75rem .5rem; }
+  .chatting .ask form { position: sticky; bottom: 1rem; margin-top: 1.5rem; box-shadow: 0 0 0 1rem var(--steel); }
   .ask textarea { width: 100%; min-height: 5.5rem; border: 0; resize: vertical; background: transparent; line-height: 1.55; font-size: 1.0625rem; }
   .ask textarea:focus-visible { outline: none; }
   .ask form:focus-within { border-color: var(--ink); }
@@ -54,10 +62,11 @@
   .examples button { width: 100%; text-align: left; border: 0; border-left: 2px solid var(--rule); background: none; padding: .25rem .75rem; cursor: pointer; color: var(--slate); line-height: 1.5; }
   .examples button:hover { border-left-color: var(--ink); color: var(--ink); }
 
-  .log { list-style: none; margin: 2rem 0 0; padding: 0; display: grid; gap: 1.25rem; }
+  .log { list-style: none; margin: 0; padding: 0; display: grid; gap: 1.25rem; }
+  .open-result { margin-top: .75rem; border: 1px solid var(--accent); border-radius: 4px; background: none; color: var(--accent); font-weight: 600; font-size: .875rem; padding: .35rem .8rem; cursor: pointer; }
   .log li { max-width: 40em; }
   .log .user { font-weight: 600; padding-left: .75rem; border-left: 2px solid var(--ink); }
-  .log .ai { background: #fff; border-radius: 6px; padding: 1rem 1.25rem; }
+  .log .ai { background: #fff; border: 1px solid var(--rule); border-radius: 6px; padding: 1rem 1.25rem; }
   .log .ai p { margin: 0 0 .6rem; }
   .log .ai ul { margin: 0 0 .6rem; padding-left: 1.2rem; }
   .log .ai > :last-child { margin-bottom: 0; }
@@ -67,15 +76,15 @@
   .calls code { font-family: inherit; font-weight: 600; color: var(--ink); }
 
   /* 결과 시트 */
-  .sheet { background: var(--plate); border-radius: 6px; padding: clamp(1.25rem, 3vw, 2rem); }
-  .sheet > h2 { margin: 0; font-size: 1.0625rem; }
-  .scenario-note { margin: .25rem 0 1rem; color: var(--slate); font-size: .9375rem; }
-  .tabs { display: flex; flex-wrap: wrap; gap: 0; margin: 0 0 1.5rem; border-bottom: 1px solid var(--ink); }
-  .tabs button { border: 0; background: none; padding: .5rem 1rem; cursor: pointer; color: var(--slate); font-weight: 600; border-bottom: 3px solid transparent; margin-bottom: -1px; }
-  .tabs button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--ink); }
+  .sheet { background: var(--plate); border: 1px solid var(--rule); border-radius: 6px; padding: clamp(1.25rem, 3vw, 2rem); position: sticky; top: 1rem; max-height: calc(100vh - 2rem); overflow-y: auto; }
+  @media (max-width: 920px) { .sheet { position: static; max-height: none; } }
+  .sheet-head { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; margin: 0 0 1.25rem; padding-bottom: .75rem; border-bottom: 2px solid var(--accent); }
+  .sheet-head h2 { margin: 0; font-size: 1.25rem; }
+  .close { border: 0; background: none; color: var(--slate); font-size: .875rem; cursor: pointer; padding: .25rem .5rem; }
+  .close:hover { color: var(--ink); }
   .basis { margin: 0 0 1.25rem; color: var(--slate); }
-  .warn { margin: 0 0 1.25rem; padding: .75rem 1rem; border-left: 4px solid var(--alert); background: #fff; color: var(--alert); font-weight: 600; }
-  .msg { margin: 0 0 1.25rem; padding: .75rem 1rem; border: 1px solid var(--alert); color: var(--alert); background: #fff; }
+  .warn { margin: 0 0 1.25rem; padding: .75rem 1rem; border-left: 4px solid var(--alert); background: color-mix(in srgb, var(--alert) 6%, #fff); color: var(--alert); font-weight: 600; }
+  .msg { margin: 0 0 1.25rem; padding: .75rem 1rem; border: 1px solid var(--alert); color: var(--alert); background: color-mix(in srgb, var(--alert) 6%, #fff); }
   .msg b { display: block; }
   .stale .figures, .stale .bar, .stale table { opacity: .35; }
 
@@ -120,8 +129,8 @@
   .fields { display: grid; grid-template-columns: repeat(auto-fill, minmax(12.5rem, 1fr)); gap: .9rem 1rem; margin: 1rem 0; }
   .fields label { display: grid; gap: .2rem; font-size: .875rem; color: var(--slate); align-content: start; }
   .fields input:not([type="range"]), .fields select { width: 100%; padding: .45rem .6rem; border: 1px solid var(--rule); border-radius: 4px; background: #fff; }
-  .fields input:focus-visible, .fields select:focus-visible { outline: 2px solid var(--clean); outline-offset: 0; border-color: var(--clean); }
-  .fields input[type="range"] { width: 100%; accent-color: var(--ink); }
+  .fields input:focus-visible, .fields select:focus-visible { outline: 2px solid var(--accent); outline-offset: 0; border-color: var(--accent); }
+  .fields input[type="range"] { width: 100%; accent-color: var(--accent); }
   .fields output { color: var(--ink); font-weight: 600; }
   .fields .note { font-size: .75rem; }
   .extra { margin: 0 0 .75rem; font-size: .875rem; color: var(--slate); }
@@ -133,18 +142,19 @@
 </head>
 <body>
 <header class="top">
-  <h1>저탄소 제철 전력 계산기 <small>Steel_Connect</small></h1>
+  <h1>제철공정의 저탄소 전환을 돕는 AI 어시스턴트 <small>Steel_Connect</small></h1>
   <p class="status" id="status">AI 연결 확인 중</p>
 </header>
 
 <main>
   <section class="ask" aria-labelledby="ask-h">
-    <h2 class="lede" id="ask-h">얼마나 만들고, 탄소를 얼마나 줄일지 물어보세요.</h2>
+    <h2 class="lede" id="ask-h">얼마나 만들고 탄소를 얼마나 줄일지 물어보세요.</h2>
+    <ol class="log" id="log" aria-live="polite"></ol>
     <form id="askForm">
       <label for="q" class="sr">질문</label>
       <textarea id="q" rows="3" placeholder="수소환원 50만 t/년으로 순 저감 50만 t을 하려면 무탄소 전력이 몇 %나 필요해?"></textarea>
       <div class="row">
-        <span class="hint">Enter로 보내고, Shift+Enter로 줄을 바꿉니다. 답은 몇 초~십수 초 걸립니다</span>
+        <span class="hint">Enter로 보내고 Shift+Enter로 줄을 바꿉니다. 답은 몇 초에서 십수 초 걸립니다</span>
         <button class="btn" id="askBtn" type="submit">질문하기</button>
       </div>
     </form>
@@ -155,25 +165,21 @@
       <li><button type="button">수소환원을 하면 탄소가 얼마나 줄어?</button></li>
       <li><button type="button">수소환원 설비 투자비와 투자 회수 기간은?</button></li>
     </ul>
-    <ol class="log" id="log" aria-live="polite"></ol>
   </section>
 
-  <section class="sheet" aria-labelledby="sheet-h">
-    <h2 id="sheet-h">계산 결과</h2>
-    <p class="scenario-note">예측이 아니라 조건부 시나리오입니다. 사내 실제 에너지 데이터는 쓰지 않았고 공개 데이터로만 계산했습니다.</p>
-    <div class="tabs" role="tablist" aria-label="계산 종류">
-      <button type="button" role="tab" id="tab-min_green" aria-controls="p-min_green" aria-selected="true">필요 무탄소 전력</button>
-      <button type="button" role="tab" id="tab-simulate" aria-controls="p-simulate" aria-selected="false">전환 시나리오</button>
-      <button type="button" role="tab" id="tab-compare_paths" aria-controls="p-compare_paths" aria-selected="false">경로 비교</button>
+  <section class="sheet" id="sheet" aria-labelledby="sheet-h" hidden>
+    <div class="sheet-head">
+      <h2 id="sheet-h">계산 결과</h2>
+      <button type="button" class="close" id="closeSheet">닫기</button>
     </div>
 
     <!-- 필요 무탄소 전력: min_green -->
-    <div role="tabpanel" id="p-min_green" aria-labelledby="tab-min_green" data-tool="min_green">
+    <div id="p-min_green" data-tool="min_green" hidden>
       <p class="basis" data-out="basis">계산 중</p>
       <div class="msg" data-out="msg" hidden></div>
       <p class="warn" data-out="warn" hidden></p>
       <figure class="bar">
-        <div class="track" role="img" data-out="track" aria-label="필요 전력 구성">
+        <div class="track" role="img" data-out="track" aria-label="요구 전력 구성">
           <span class="seg grid" data-seg="grid"></span><span class="seg secured" data-seg="secured"></span><span class="seg need" data-seg="need"></span>
         </div>
         <figcaption class="legend">
@@ -183,10 +189,10 @@
         </figcaption>
       </figure>
       <dl class="figures">
-        <div><dt>필요한 전체 전력</dt><dd><span class="v" data-out="power">-</span><span class="u">TWh/년</span></dd></div>
-        <div class="main"><dt>그중 무탄소 전력</dt><dd><span class="v" data-out="green">-</span><span class="u">TWh/년</span></dd><dd class="sub" data-out="share"></dd></div>
+        <div><dt>요구 전력</dt><dd><span class="v" data-out="power">-</span><span class="u">TWh/년</span></dd></div>
+        <div class="main"><dt>무탄소 전력 비율</dt><dd><span class="v" data-out="green">-</span><span class="u">%</span></dd><dd class="sub" data-out="share"></dd></div>
         <div><dt>부족분 (확보 가능량 대비)</dt><dd><span class="v" data-out="gap">-</span><span class="u">TWh/년</span></dd><dd class="sub" data-out="met"></dd></div>
-        <div><dt>전력 요금</dt><dd><span class="v" data-out="cost">-</span><span class="u">억 원/년</span></dd><dd class="sub">전력 요금만. 설비 투자비·원료비 절감 미반영</dd></div>
+        <div><dt>전력 요금</dt><dd><span class="v" data-out="cost">-</span><span class="u">억 원/년</span></dd><dd class="sub">설비 투자비와 원료비 절감은 빠진 전력 요금</dd></div>
       </dl>
       <p class="context" data-out="context"></p>
       <details open>
@@ -196,7 +202,7 @@
           <div class="fields">
             <label>수소환원 연 생산량 (만 t)<input name="h2_output_mt" data-scale="0.01" inputmode="decimal" value="50"><span class="note" data-range="h2_mt" data-unit-scale="100" data-unit="만 t"></span></label>
             <label>목표 순 저감 (만 tCO2/년)<input name="target_abate_t" data-scale="10000" inputmode="decimal" value="50"><span class="note">고로 대비 순 저감</span></label>
-            <label>확보 가능한 무탄소 전력 (TWh/년)<input name="green_supply_twh" inputmode="decimal" value="0"><span class="note">사용자 가정. 사내 공급 계획은 모름</span></label>
+            <label>확보 가능한 무탄소 전력 (TWh/년)<input name="green_supply_twh" inputmode="decimal" value="0"><span class="note">직접 넣는 가정값. 사내 공급 계획은 모름</span></label>
             <label>전력배출계수 (tCO2/MWh)<input name="grid_factor" inputmode="decimal" placeholder="비우면 기본값"><span class="note" data-range="grid_factor"></span></label>
             <label>수소환원 전력 원단위 (kWh/t)<input name="h2_kwh_t" inputmode="decimal" placeholder="비우면 기본값"><span class="note" data-range="h2_kwh_t"></span></label>
             <label>수소환원 잔여 배출 (tCO2/t)<input name="h2_resid_t" inputmode="decimal" placeholder="비우면 기본값"><span class="note" data-range="h2_resid_t"></span></label>
@@ -208,14 +214,14 @@
     </div>
 
     <!-- 전환 시나리오: simulate -->
-    <div role="tabpanel" id="p-simulate" aria-labelledby="tab-simulate" data-tool="simulate" hidden>
+    <div id="p-simulate" data-tool="simulate" hidden>
       <p class="basis" data-out="basis">계산 중</p>
       <div class="msg" data-out="msg" hidden></div>
       <dl class="figures">
         <div><dt>추가 구매 전력</dt><dd><span class="v" data-out="add_twh">-</span><span class="u">TWh/년</span></dd><dd class="sub" data-out="buy"></dd></div>
         <div class="main"><dt>순 저감 (음수면 순증가)</dt><dd><span class="v" data-out="abate">-</span><span class="u">만 tCO2/년</span></dd><dd class="sub" data-out="scope"></dd></div>
         <div><dt>추가 전기요금</dt><dd><span class="v" data-out="total_eok">-</span><span class="u">억 원/년</span></dd><dd class="sub" data-out="unit"></dd></div>
-        <div><dt>순 저감 1 t당 전력 비용</dt><dd><span class="v" data-out="per_t">-</span><span class="u">원/tCO2</span></dd><dd class="sub">전력 요금만. 설비 투자비·원료비 절감 미반영</dd></div>
+        <div><dt>순 저감 1 t당 전력 비용</dt><dd><span class="v" data-out="per_t">-</span><span class="u">원/tCO2</span></dd><dd class="sub">설비 투자비와 원료비 절감은 빠진 값</dd></div>
       </dl>
       <p class="context" data-out="ets" hidden></p>
       <details open>
@@ -237,20 +243,20 @@
         </form>
       </details>
       <details>
-        <summary data-out="assumed-h">기본값을 가정한 변수</summary>
+        <summary data-out="assumed-h">기본값으로 가정한 변수</summary>
         <ul class="assumed" data-out="assumed"></ul>
       </details>
     </div>
 
     <!-- 경로 비교: compare_paths -->
-    <div role="tabpanel" id="p-compare_paths" aria-labelledby="tab-compare_paths" data-tool="compare_paths" hidden>
+    <div id="p-compare_paths" data-tool="compare_paths" hidden>
       <p class="basis" data-out="basis">계산 중</p>
       <div class="msg" data-out="msg" hidden></div>
       <table>
         <thead><tr><th>경로</th><th>필요 생산량<br>(만 t/년)</th><th>추가 전력<br>(TWh/년)</th><th>전력 요금<br>(억 원/년)</th><th>1 MWh당 순 저감<br>(tCO2)</th></tr></thead>
         <tbody data-out="rows"></tbody>
       </table>
-      <p class="context">요금은 전력 요금만입니다(설비 투자비·원료비 절감 미반영). 시뮬레이터의 생산 능력 상한은 250만 t/년입니다.</p>
+      <p class="context">요금에는 전력 요금만 넣었고 설비 투자비와 원료비 절감은 넣지 않았습니다. 시뮬레이터가 다루는 생산 능력은 250만 t/년까지입니다.</p>
       <details open>
         <summary>조건 바꾸기</summary>
         <form novalidate>
@@ -278,10 +284,11 @@
 
 <footer>
   <ul>
-    <li>예측이 아니라 조건부 시나리오(what-if)입니다. 숫자는 계산 도구가 내고, AI는 질문을 해석하고 결과를 설명만 합니다.</li>
-    <li>부족분은 연간 전력량 기준입니다. 시간대별 공급·저장은 반영하지 않아 생산 지속 여부를 판단하지 않습니다.</li>
-    <li>요금은 전력 요금만입니다(설비 투자비·원료비 절감 미반영). 배출권 가치는 입력한 가정 가격의 참고 가치이며 실제 구매 회피액이 아닙니다.</li>
-    <li>사내 실제 에너지 데이터는 쓰지 않았습니다(공개 데이터만).</li>
+    <li>예측이 아니라 조건부 시나리오입니다. 사내 실제 에너지 데이터 없이 공개 자료로만 계산했습니다.</li>
+    <li>숫자는 모두 계산 도구가 냅니다. AI는 질문을 읽고 결과를 풀어 설명할 뿐입니다.</li>
+    <li>부족분은 1년 전력량으로 따진 값입니다. 시간대별 공급과 저장은 넣지 않았으므로 생산을 이어갈 수 있는지는 이 값으로 판단하지 않습니다.</li>
+    <li>요금은 전력 요금만 셌습니다. 설비 투자비와 원료비 절감은 들어 있지 않습니다.</li>
+    <li>배출권 가치는 입력한 가격으로 환산한 참고 가치입니다. 실제 구매 회피액과는 다릅니다.</li>
   </ul>
 </footer>
 
@@ -369,7 +376,7 @@ function fillForm(tool, input) {
   extra[tool] = Object.fromEntries(Object.entries(input).filter(([k]) => !names.has(k)));
   const ex = out(panel(tool), "extra"), list = Object.entries(extra[tool]);
   ex.hidden = !list.length;
-  ex.textContent = list.length ? `AI가 정한 추가 조건(입력칸 없음, 다시 계산에도 적용): ${list.map(([k, v]) => `${LABEL[k] || k} = ${JSON.stringify(v)}`).join(", ")}` : "";
+  ex.textContent = list.length ? `AI가 넣은 조건(입력칸에는 없고 다시 계산할 때도 씀): ${list.map(([k, v]) => `${LABEL[k] || k} = ${JSON.stringify(v)}`).join(", ")}` : "";
   $$("output[data-show]", form).forEach(showSlider);
 }
 
@@ -378,8 +385,8 @@ function showStatus(tool, r) {
   const p = panel(tool), msg = out(p, "msg");
   p.classList.toggle("stale", r.status !== "ok");
   msg.hidden = r.status === "ok";
-  if (r.status === "ask") msg.innerHTML = `<b>입력이 더 필요합니다</b>${esc((r.missing || []).map(k => LABEL[k] || k).join(", "))}`;
-  if (r.status === "refuse") msg.innerHTML = `<b>계산하지 않았습니다 (근거 범위 밖)</b>${esc(r.reason)}`;
+  if (r.status === "ask") msg.innerHTML = `<b>이 값을 넣어 주세요</b>${esc((r.missing || []).map(k => LABEL[k] || k).join(", "))}`;
+  if (r.status === "refuse") msg.innerHTML = `<b>근거가 있는 범위를 벗어나 계산하지 않았습니다</b>${esc(r.reason)}`;
   return r.status === "ok";
 }
 
@@ -394,48 +401,48 @@ const RENDER = {
     out(p, "basis").textContent = `수소환원 연 ${plain(args.h2_output_mt * 100)}만 t 생산, 목표 순 저감 ${man(args.target_abate_t)}만 tCO2/년`;
     const warn = out(p, "warn");
     warn.hidden = x.feasible;
-    if (!x.feasible) warn.textContent = `${x.reason}. 이 생산량으로 낼 수 있는 최대 순 저감은 ${man(x.max_abate_t)}만 tCO2/년입니다.`;
+    if (!x.feasible) warn.textContent = `${x.reason}. 이 생산량으로는 많아야 ${man(x.max_abate_t)}만 tCO2/년까지 줄일 수 있습니다.`;
     const w = v => `${x.feasible && x.power_twh ? v / x.power_twh * 100 : 0}%`;  // 막대 너비(비율)만. 표시 숫자는 결과값 그대로
     $('[data-seg="grid"]', p).style.width = w(x.power_twh - (x.green_twh || 0));
     $('[data-seg="secured"]', p).style.width = w((x.green_twh || 0) - (x.gap_twh || 0));
     $('[data-seg="need"]', p).style.width = w(x.gap_twh || 0);
-    out(p, "track").setAttribute("aria-label", x.feasible ? `필요 전력 ${num(x.power_twh)} TWh 중 무탄소 ${num(x.green_twh)} TWh, 부족분 ${num(x.gap_twh)} TWh` : "무탄소 100%로도 목표 미달");
+    out(p, "track").setAttribute("aria-label", x.feasible ? `요구 전력 ${num(x.power_twh)} TWh 중 무탄소 ${num(x.green_twh)} TWh, 부족분 ${num(x.gap_twh)} TWh` : "무탄소 100%로도 목표 미달");
     out(p, "l-gap").textContent = x.feasible ? `${num(x.gap_twh)} TWh` : "-";
     out(p, "power").textContent = num(x.power_twh);
-    out(p, "green").textContent = x.feasible ? num(x.green_twh) : "-";
-    out(p, "share").textContent = x.feasible ? `필요 무탄소 비율 ${num(x.green_share * 100, 1)}%` : "";
+    out(p, "green").textContent = x.feasible ? num(x.green_share * 100, 1) : "-";
+    out(p, "share").textContent = x.feasible ? `요구 전력 중 무탄소 ${num(x.green_twh)} TWh/년` : "";
     out(p, "gap").textContent = x.feasible ? num(x.gap_twh) : "-";
-    out(p, "met").textContent = x.feasible ? (x.met ? "확보 가능량으로 충족(연간 기준)" : "확보 가능량으로 부족(연간 기준)") : "";
+    out(p, "met").textContent = x.feasible ? (x.met ? "확보 가능량으로 충분(연간 기준)" : "확보 가능량으로는 모자람(연간 기준)") : "";
     out(p, "cost").textContent = num(x.cost_eok, 0);
-    out(p, "context").textContent = `${x.note}. 이 생산량의 최대 순 저감(무탄소 100%)은 ${man(x.max_abate_t)}만 tCO2/년입니다.`;
-    setCommon(r, [x.note, "확보 가능한 무탄소 전력은 사용자가 넣는 가정값입니다(사내 공급 계획은 모름).", "전력 원단위는 수전해 수소 포함 문헌값(Vogl·Bhaskar)이며 포스코 실측이 아닙니다.", "요금은 전력 요금만입니다(설비 투자비·원료비 절감 미반영)."]);
+    out(p, "context").textContent = `${x.note}. 무탄소 전력을 100% 쓰면 이 생산량으로 최대 ${man(x.max_abate_t)}만 tCO2/년까지 줄일 수 있습니다.`;
+    setCommon(r, [x.note, "확보 가능한 무탄소 전력은 직접 넣는 가정값입니다. 사내 공급 계획은 알 수 없습니다.", "전력 원단위는 수전해 수소까지 포함한 문헌값(Vogl·Bhaskar)으로, 포스코가 실측한 값이 아닙니다.", "요금에는 전력 요금만 넣었고 설비 투자비와 원료비 절감은 넣지 않았습니다."]);
     if (x.feasible && args.h2_kwh_t === undefined) spread(args, p);
   },
   simulate(r) {
     const p = panel("simulate"), x = r.result, pw = x.power, c = x.carbon, k = x.cost, inp = x.input;
     out(p, "basis").textContent = `전기로 ${plain(inp.eaf_mt * 100)}만 t × 가동률 ${plain(inp.eaf_util * 100)}%, 수소환원 ${plain(inp.h2_mt * 100)}만 t(무탄소 ${plain(inp.h2_green * 100)}%), 요금제 ${inp.plan}`;
     out(p, "add_twh").textContent = num(pw.add_twh);
-    out(p, "buy").textContent = `현재 구매 전력 대비 +${num(pw.buy_increase_pct, 1)}%`;
+    out(p, "buy").textContent = `현재 구매 전력보다 ${num(pw.buy_increase_pct, 1)}% 늘어남`;
     out(p, "abate").textContent = man(c.abate_tco2);
     out(p, "scope").textContent = `Scope 1(직접 배출) 감축 ${man(c.scope1_cut_tco2)}만 t, Scope 2(구매 전력 배출) 증가 ${man(c.add_tco2)}만 t`;
     out(p, "total_eok").textContent = num(k.total_eok, 0);
-    out(p, "unit").textContent = `kWh당 ${num(k.unit_krw_kwh, 1)}원(기본·부가·기금 포함). 전력 요금만`;
+    out(p, "unit").textContent = `kWh당 ${num(k.unit_krw_kwh, 1)}원. 기본요금·부가요금·기금 포함`;
     out(p, "per_t").textContent = k.power_cost_per_tco2_krw == null ? "순 저감 없음" : num(k.power_cost_per_tco2_krw, 0);
     const ets = out(p, "ets");
     ets.hidden = c.ets_value_eok == null;
-    if (c.ets_value_eok != null) ets.innerHTML = `배출권 참고 가치 <b>${num(c.ets_value_eok, 0)}억 원/년</b> (가정 가격 ${plain(inp.ets_price)}원/tCO2). 참고 가치이며 실제 구매 회피액이 아닙니다(할당량·보유량을 모름).`;
+    if (c.ets_value_eok != null) ets.innerHTML = `배출권 가격을 ${plain(inp.ets_price)}원/tCO2로 잡으면 순 저감의 가치는 <b>${num(c.ets_value_eok, 0)}억 원/년</b>입니다. 할당량과 보유량을 모르기 때문에 참고 가치일 뿐 실제 구매 회피액과는 다릅니다.`;
     const used = Object.entries(r.defaults_used || {});
-    out(p, "assumed-h").textContent = `기본값을 가정한 변수 (${used.length}개)`;
+    out(p, "assumed-h").textContent = `기본값으로 가정한 변수 (${used.length}개)`;
     out(p, "assumed").innerHTML = used.map(([n, v]) => `<li>${esc(LABEL[n] || n)} = ${esc(v ?? "없음")}</li>`).join("");
-    setCommon(r, ["저신뢰 가정(시뮬레이터 LOW_CONF):", ...x.assumptions]);
+    setCommon(r, ["신뢰도가 낮은 가정 (시뮬레이터 LOW_CONF)", ...x.assumptions]);
   },
   compare_paths(r, args) {
     const p = panel("compare_paths");
-    out(p, "basis").textContent = `같은 목표 순 저감 ${man(args.target_abate_t)}만 tCO2/년을 경로별로 달성할 때`;
+    out(p, "basis").textContent = `순 저감 ${man(args.target_abate_t)}만 tCO2/년을 경로마다 달성하려면`;
     out(p, "rows").innerHTML = r.result.map(x => x.feasible
       ? `<tr><td>${esc(x.name)}</td><td>${num(x.required_mt * 100, 1)}${x.within_capacity ? "" : " (상한 초과)"}</td><td>${num(x.power_twh)}</td><td>${num(x.cost_eok, 0)}</td><td>${num(x.abate_per_mwh)}</td></tr>`
       : `<tr><td>${esc(x.name)}</td><td class="off" colspan="4">불가능: ${esc(x.reason)}</td></tr>`).join("");
-    setCommon(r, ["필요 생산량은 1 Mt 결과를 비례 환산한 값입니다(target.required_output).", "'상한 초과'는 시뮬레이터 생산 능력 상한 250만 t/년을 넘는다는 뜻입니다.", "요금은 전력 요금만입니다(설비 투자비·원료비 절감 미반영)."]);
+    setCommon(r, ["필요 생산량은 100만 t 기준 결과를 비례로 환산했습니다(target.required_output).", "'상한 초과'가 붙은 경로는 필요 생산량이 시뮬레이터 상한인 250만 t/년보다 큽니다.", "요금에는 전력 요금만 넣었고 설비 투자비와 원료비 절감은 넣지 않았습니다."]);
   },
 };
 
@@ -443,8 +450,8 @@ async function spread(args, p) {  // 전력 원단위를 문헌 양 끝으로 �
   const { h2_output_mt, target_abate_t, ...rest } = args;
   const r = await post("/api/calc", { tool: "sweep_green", args: { h2_output_mt, target_abate_t, ...rest, vary: "h2_kwh_t", values: H2_KWH_SPREAD } });
   if (r.status !== "ok") return;
-  const rows = r.result.map(x => `원단위 ${plain(x.h2_kwh_t)} kWh/t이면 ${x.feasible ? `무탄소 ${num(x.green_twh)} TWh(${num(x.green_share * 100, 1)}%)` : "무탄소 100%로도 부족"}`);
-  out(p, "context").textContent += ` 문헌 범위: ${rows.join(", ")}.`;
+  const rows = r.result.map(x => `${plain(x.h2_kwh_t)} kWh/t일 때 ${x.feasible ? `${num(x.green_twh)} TWh(${num(x.green_share * 100, 1)}%)` : "100%로도 부족"}`);
+  out(p, "context").textContent += ` 전력 원단위를 문헌값 양 끝으로 바꿔 보면 무탄소 전력은 ${rows.join(", ")}입니다.`;
 }
 
 async function calc(tool) {
@@ -459,12 +466,20 @@ async function calc(tool) {
   }
 }
 
-function selectTab(tool) {
-  for (const t of $$('[role="tab"]')) {
-    const on = t.id === `tab-${tool}`;
-    t.setAttribute("aria-selected", on);
-    $(`#${t.getAttribute("aria-controls")}`).hidden = !on;
-  }
+const TITLE = { min_green: "필요 무탄소 전력", simulate: "전환 시나리오", compare_paths: "경로 비교" };
+
+function openResult(hit) {  // 답변에 딸린 계산 결과를 오른쪽 창에 연다
+  document.body.classList.add("has-result");
+  $("#sheet").hidden = false;
+  $("#sheet-h").textContent = TITLE[hit.name];
+  for (const t in TITLE) panel(t).hidden = t !== hit.name;
+  fillForm(hit.name, hit.input); showStatus(hit.name, hit.output); RENDER[hit.name](hit.output, hit.input);
+  if (matchMedia("(max-width: 920px)").matches) $("#sheet").scrollIntoView({ behavior: "smooth" });
+}
+
+function closeResult() {
+  document.body.classList.remove("has-result");
+  $("#sheet").hidden = true;
 }
 
 /* 질문 */
@@ -484,8 +499,10 @@ function callsHtml(calls) {
 async function askAI(q) {
   const btn = $("#askBtn");
   btn.disabled = true;
+  document.body.classList.add("chatting");
+  $("#q").placeholder = "이어서 물어보세요. 예: 확보 가능한 무탄소 전력이 0.3 TWh면?";
   addMsg("user", esc(q));
-  const pending = addMsg("ai wait", "계산 중입니다. 계산 도구를 돌리고 답을 정리하고 있습니다(몇 초~십수 초).");
+  const pending = addMsg("ai wait", "계산 중입니다. 답이 나오기까지 몇 초에서 십수 초 걸립니다.");
   try {
     const res = await fetch("/api/ask", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ question: q, session }) });
     const d = await res.json();
@@ -493,7 +510,13 @@ async function askAI(q) {
     session = d.session; sessionStorage.setItem("sc-session", session);
     pending.className = "ai"; pending.innerHTML = md(d.answer) + callsHtml(d.calls);
     const hit = [...d.calls].reverse().find(c => c.name in RENDER && c.output.status === "ok");
-    if (hit) { selectTab(hit.name); fillForm(hit.name, hit.input); showStatus(hit.name, hit.output); RENDER[hit.name](hit.output, hit.input); }
+    if (hit) {
+      const b = document.createElement("button");
+      b.type = "button"; b.className = "open-result"; b.textContent = `계산 결과 보기 (${TITLE[hit.name]})`;
+      b.addEventListener("click", () => openResult(hit));
+      pending.append(b);
+      openResult(hit);
+    }
   } catch (e) {
     pending.className = "ai err"; pending.textContent = `서버에 연결하지 못했습니다 (${e.message}). python -m src.web 이 실행 중인지 확인하세요.`;
   } finally { btn.disabled = false; }
@@ -508,8 +531,7 @@ $("#q").addEventListener("keydown", e => {
   if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); $("#askForm").requestSubmit(); }
 });
 $$(".examples button").forEach(b => b.addEventListener("click", () => { $("#q").value = b.textContent; $("#q").focus(); }));
-$$('[role="tab"]').forEach(t => t.addEventListener("click", () => selectTab(t.id.slice(4))));
-if (location.hash.slice(1) in RENDER) selectTab(location.hash.slice(1));  // 주소 끝 #simulate, #compare_paths 로 탭을 바로 연다
+$("#closeSheet").addEventListener("click", closeResult);
 for (const tool of Object.keys(RENDER)) {
   const form = $("form", panel(tool));
   let timer;
@@ -526,12 +548,9 @@ fetch("/api/status").then(r => r.json()).then(({ llm }) => {
   const s = $("#status");
   s.classList.toggle("on", !!llm);
   const NAME = { api: "Anthropic API", bedrock: "Amazon Bedrock", gemini: "Google Gemini", groq: "Groq", ollama: "내 PC의 Ollama", custom: "OpenAI 호환 API", claude_code: "Claude Code" };
-  s.textContent = llm ? `AI 연결됨 (${NAME[llm] || llm})` : "AI 미연결. 오른쪽 계산기는 바로 쓸 수 있습니다";
+  s.textContent = llm ? `AI 연결됨 (${NAME[llm] || llm})` : "AI 연결 안 됨. 지금은 질문에 답할 수 없습니다";
 }).catch(() => { $("#status").textContent = "서버 상태를 확인하지 못했습니다"; });
-fetch("/api/tools").then(r => r.json()).then(info => {
-  INFO = info; initForms();
-  for (const tool of Object.keys(RENDER)) calc(tool);
-});
+fetch("/api/tools").then(r => r.json()).then(info => { INFO = info; initForms(); });
 </script>
 </body>
 </html>
