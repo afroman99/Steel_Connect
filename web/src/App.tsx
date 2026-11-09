@@ -70,7 +70,8 @@ export default function App() {
       const d: Out = await res.json()
       if (!res.ok) return patch(id, { wait: false, err: true, text: d.error })
       session.current = d.session
-      const hit = [...(d.calls as Call[])].reverse().find(isResult) as Hit | undefined
+      const ok = (d.calls as Call[]).filter(isResult)  // close_gap은 min_green 결과를 포함하는 상위 결과라 있으면 그것을 열고, 없으면 마지막 결과를 연다
+      const hit = (ok.find((c) => c.name === "close_gap") ?? ok[ok.length - 1]) as Hit | undefined
       patch(id, { wait: false, text: d.answer, calls: d.calls, hit })
       if (hit) open(hit)
     } catch (e) {
