@@ -12,10 +12,11 @@ from src.assistant_tools import SYSTEM_PROMPT
 
 # fmt: off
 CMD_RULE = "도구는 Bash로 `python3 -m src.assistant_cli 도구이름 '{JSON}'` 형태만 호출할 수 있다. 결과는 JSON 한 줄이다."
+MODEL = "sonnet"  # 사용자 결정(한도 절약). 별칭 sonnet = 현재 최신 Sonnet
 ALLOWED = "Bash(python3 -m src.assistant_cli:*)"  # 이 명령만 허용. 파일 읽기·수정, 다른 명령은 막는다
 
 
-def ask(question, model=None, timeout=300):
+def ask(question, model=MODEL, timeout=300):
     """ask = 질문 하나를 claude -p로 보내 최종 답을 문자열로 받는다. 도구 호출은 Claude Code가 알아서 반복한다."""
     cmd = ["claude", "-p", question, "--append-system-prompt", f"{SYSTEM_PROMPT}\n\n{CMD_RULE}", "--allowedTools", ALLOWED,
            "--disallowedTools", "Edit", "Write", "WebFetch", "WebSearch", "--no-session-persistence", "--output-format", "text"]
