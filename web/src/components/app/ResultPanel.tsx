@@ -218,11 +218,148 @@ function CompareView({ input, out }: { input: Out; out: Out }) {
   )
 }
 
+const PICK: Record<string, string> = { green: "그린 수소", grid: "전력망 전기" }
+const CELL: Record<string, { text: string; cls: string }> = {
+  green: { text: "그린", cls: "bg-clean text-white" },
+  grid: { text: "전력망", cls: "bg-grid text-white" },
+  bf: { text: "그린만", cls: "bg-destructive text-white" },
+}
+
+/** 그린 수소 vs 전력망 전기(h2_supply): 추천, 갈림길 값, 선택지 비교, 상황별 추천 지도. 숫자는 모두 결과값 그대로 */
+function H2SupplyView({ out }: { out: Out }) {
+  const x = out.result, v = x.verdict, th = x.thresholds, a = x.applied_input, m = x.map
+  const green = v.pick === "green"
+  return (
+    <div className="space-y-5">
+      <p className="text-sm text-muted-foreground">
+        수소환원 연 {plain(a.h2_output_mt * 100)}만 t, 탄소 가격 {plain(a.ets_price)}원/tCO2, 직접PPA {plain(a.ppa_krw_kwh)}원/kWh, 전력배출계수 {plain(a.grid_factor)}, 요금제 {a.plan}
+        {x.target_abate_t != null && `, 목표 순 저감 ${man(x.target_abate_t)}만 tCO2/년`}
+      </p>
+      <div className={`space-y-1 rounded-xl border-l-4 p-4 ${green ? "border-clean bg-clean/10" : "border-grid bg-grid/10"}`}>
+        <p className="text-sm text-muted-foreground">지금 조건에서 추천</p>
+        <p className={`text-3xl font-semibold tracking-tight ${green ? "text-clean" : ""}`}>{PICK[v.pick]}</p>
+        <p className="text-sm leading-6">{v.reason}</p>
+        {v.notes.map((n: string) => <p key={n} className="text-sm leading-6 text-muted-foreground">{n}</p>)}
+      </div>
+      <Figures>
+        <Figure title="갈림길 탄소 가격" value={num(th.ets_breakeven, 0)} unit="원/tCO2" main sub="이보다 비싸면 그린 수소가 싸다. 그린으로 바꿔 추가로 줄이는 1 t의 비용과 같다" />
+        <Figure title="갈림길 직접PPA 단가" value={num(th.ppa_breakeven, 0)} unit="원/kWh" sub={`이보다 싸면 그린 수소가 싸다. 한전 전력 kWh당 ${num(th.unit_grid_krw_kwh, 1)}원, PPA는 부대비용 포함 ${num(th.unit_ppa_krw_kwh, 1)}원`} />
+        <Figure title="고로 손익분기 전력배출계수" value={num(th.gf_breakeven_bf, 3)} unit="tCO2/MWh" sub="이보다 높으면 전력망 전기로 만든 수소는 고로보다 탄소를 더 낸다" />
+        <Figure title="그린 수소에 필요한 재생에너지" value={num(th.green_twh_needed)} unit="TWh/년"
+          sub={x.supply_ok == null ? "확보 가능량을 넣으면 부족분을 확인합니다" : x.supply_ok ? "확보 가능량으로 충분(연간 기준)" : `확보 가능량 ${plain(x.green_supply_twh)} TWh로는 모자람`} />
+      </Figures>
+      <div className="overflow-x-auto rounded-xl border border-border">
+        <table className="w-full border-collapse text-sm">
+          <thead>
+            <tr className="text-left text-muted-foreground">
+              <th className="px-3 py-2 font-medium">선택지</th>
+              <th className="px-3 py-2 text-right font-medium">쇳물 1t당 비용<br />(전력 + 탄소, 원)</th>
+              <th className="px-3 py-2 text-right font-medium">1t당 순 저감<br />(tCO2)</th>
+              <th className="px-3 py-2 text-right font-medium">Scope 2 배출<br />(만 t/년)</th>
+              <th className="px-3 py-2 text-right font-medium">재생에너지<br />(TWh/년)</th>
+            </tr>
+          </thead>
+          <tbody>
+            {x.options.map((o: Out) => (
+              <tr key={o.key} className={`border-t border-border align-top ${o.key === v.pick ? "bg-muted/60 font-medium" : ""}`}>
+                <td className="px-3 py-2">
+                  {o.name}{!o.compared && <Badge variant="secondary" className="ml-2 h-5 px-2 text-xs">참고</Badge>}
+                  <span className="block text-xs font-normal text-muted-foreground">{o.note}</span>
+                </td>
+                <td className="px-3 py-2 text-right">{num(o.krw_per_t, 0)}<span className="block text-xs font-normal text-muted-foreground">{num(o.power_krw_per_t, 0)} + {num(o.krw_per_t - o.power_krw_per_t, 0)}</span></td>
+                <td className="px-3 py-2 text-right">{num(o.abate_per_t)}</td>
+                <td className="px-3 py-2 text-right">{man(o.scope2_tco2)}</td>
+                <td className="px-3 py-2 text-right">{num(o.green_twh)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <section className="space-y-3">
+        <h3 className="text-lg font-semibold">어떤 상황에서 무엇이 좋은가</h3>
+        <div className="grid gap-3 sm:grid-cols-2">
+          {([["green", "그린 수소가 좋은 경우", "border-clean"], ["grid", "전력망 전기가 좋은 경우", "border-grid"]] as const).map(([k, title, cls]) => (
+            <div key={k} className={`space-y-2 rounded-xl border-t-4 border-x border-b border-border p-4 ${cls}`}>
+              <p className="font-semibold">{title}</p>
+              <ul className="list-disc space-y-1 pl-5 text-sm leading-6">{x.conditions[k].map((c: string) => <li key={c}>{c}</li>)}</ul>
+            </div>
+          ))}
+        </div>
+        <p className="text-sm text-muted-foreground">각 조건은 다른 값은 지금 그대로 두고 하나만 바꿨을 때의 갈림길입니다.</p>
+      </section>
+      <section className="space-y-3">
+        <h3 className="text-lg font-semibold">시간 일치로 보면 (참고)</h3>
+        <p className="text-sm leading-6 text-muted-foreground">위 추천은 1년 물량으로 재생에너지를 계약한 기준입니다. 같은 시간에 난 재생에너지만 그린으로 인정하면 아래처럼 줄어듭니다(2025 전력거래소 시간별 실적).</p>
+        <div className="overflow-x-auto rounded-xl border border-border">
+          <table className="w-full border-collapse text-sm">
+            <thead>
+              <tr className="text-left text-muted-foreground">
+                <th className="px-3 py-2 font-medium">재생에너지</th>
+                <th className="px-3 py-2 text-right font-medium">같은 시간에<br />채우는 비율</th>
+                <th className="px-3 py-2 text-right font-medium">남는<br />재생에너지</th>
+                <th className="px-3 py-2 text-right font-medium">1t당 순 저감<br />(tCO2)</th>
+                <th className="px-3 py-2 text-right font-medium">100% 맞추는 저장<br />(부하 일수)</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr className="border-t border-border">
+                <td className="px-3 py-2">연간 계약 기준 (추천 계산)</td>
+                <td className="px-3 py-2 text-right">100%</td><td className="px-3 py-2 text-right">-</td>
+                <td className="px-3 py-2 text-right">{num(x.options.find((o: Out) => o.key === "green").abate_per_t)}</td><td className="px-3 py-2 text-right">-</td>
+              </tr>
+              {Object.entries<any>(x.hourly.rows).map(([k, h]) => (
+                <tr key={k} className="border-t border-border">
+                  <td className="px-3 py-2">{h.name}{h.cf != null && <span className="block text-xs text-muted-foreground">이용률 {num(h.cf * 100, 1)}%</span>}</td>
+                  <td className="px-3 py-2 text-right">{num(h.share * 100, 0)}%</td>
+                  <td className="px-3 py-2 text-right">{num(h.surplus * 100, 0)}%</td>
+                  <td className="px-3 py-2 text-right">{num(h.abate_per_t)}</td>
+                  <td className="px-3 py-2 text-right">{num(h.storage_h / 24, 0)}일</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <p className="text-sm leading-6 text-muted-foreground">{x.hourly.note}. 전력망 전기의 1t당 순 저감은 {num(x.options.find((o: Out) => o.key === "grid").abate_per_t)} t입니다.</p>
+      </section>
+      <section className="space-y-3">
+        <h3 className="text-lg font-semibold">상황별 추천 지도</h3>
+        <div className="overflow-x-auto rounded-xl border border-border">
+          <table className="w-full border-collapse text-center text-xs">
+            <thead>
+              <tr className="text-muted-foreground">
+                <th className="px-2 py-2 text-left font-medium">탄소 가격 ↓ / 전력배출계수 →</th>
+                {m.gf.map((g: number) => <th key={g} className="px-2 py-2 font-medium">{plain(g)}</th>)}
+              </tr>
+            </thead>
+            <tbody>
+              {[...m.ets].map((p: number, i: number) => [p, i] as const).reverse().map(([p, i]) => (
+                <tr key={p} className="border-t border-border">
+                  <th className="px-2 py-2 text-left font-medium text-muted-foreground">{plain(p)}원</th>
+                  {m.cells[i].map((c: string, j: number) => {
+                    const here = m.gf[j] === a.grid_factor && p === a.ets_price
+                    return <td key={j} className={`border border-background px-2 py-2 ${CELL[c].cls} ${here ? "font-bold outline-3 outline-foreground -outline-offset-3" : ""}`}>{CELL[c].text}{here && " ●"}</td>
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <p className="text-sm leading-6 text-muted-foreground">
+          {Object.entries<string>(m.legend).map(([k, t]) => <span key={k} className="mr-3 inline-flex items-center gap-1.5"><i className={`size-3 rounded-sm ${CELL[k].cls}`} />{t}</span>)}
+          <br />지금 PPA 단가({plain(a.ppa_krw_kwh)}원)·요금제 기준입니다. ●는 지금 조건. {m.note}.
+          <br />탄소 가격 참고(ICAP, 최근 1년): K-ETS {plain(x.ets_ref.kets_1y.min)}~{plain(x.ets_ref.kets_1y.max)}원(평균 {plain(x.ets_ref.kets_1y.mean)}원), EU ETS {plain(x.ets_ref.euets_1y.min)}~{plain(x.ets_ref.euets_1y.max)}원(원화 환산).
+        </p>
+      </section>
+    </div>
+  )
+}
+
 const LIMITS: Record<ToolName, (out: Out) => string[]> = {
   min_green: (o) => [o.result.note, "확보 가능한 무탄소 전력은 직접 넣는 가정값입니다. 사내 공급 계획은 알 수 없습니다.", "전력 원단위는 수전해 수소까지 포함한 문헌값(Vogl·Bhaskar)으로, 포스코가 실측한 값이 아닙니다.", COST_NOTE],
   close_gap: (o) => [o.result.note, "확보 가능한 무탄소 전력은 직접 넣는 가정값입니다. 사내 공급 계획은 알 수 없습니다.", "조건을 한 번에 하나씩만 바꾼 값입니다. 전환 비용과 시점은 반영하지 않았습니다.", COST_NOTE],
   simulate: (o) => ["신뢰도가 낮은 가정 (시뮬레이터 LOW_CONF)", ...o.result.assumptions],
   compare_paths: () => ["필요 생산량은 100만 t 기준 결과를 비례로 환산했습니다(target.required_output).", "'상한 초과'가 붙은 경로는 필요 생산량이 시뮬레이터 상한인 250만 t/년보다 큽니다.", COST_NOTE],
+  h2_supply: (o) => [o.result.note, ...o.result.assumptions],
 }
 
 const H2_KWH_SPREAD = [3480, 3720] // 원단위 문헌값 양 끝(Vogl 2018, Bhaskar 2020)
@@ -269,7 +406,7 @@ export function ResultPanel({ hit, info, onClose }: { hit: Hit; info: Info | nul
           </div>
         )}
         <div className={msg ? "opacity-50" : ""}>
-          {hit.name === "simulate" ? <SimulateView out={output} /> : hit.name === "compare_paths" ? <CompareView input={input} out={output} /> : <MinGreenView tool={hit.name} input={input} out={output} spread={spread} />}
+          {hit.name === "simulate" ? <SimulateView out={output} /> : hit.name === "compare_paths" ? <CompareView input={input} out={output} /> : hit.name === "h2_supply" ? <H2SupplyView out={output} /> : <MinGreenView tool={hit.name} input={input} out={output} spread={spread} />}
         </div>
         <details open className="border-t border-border py-3">
           <summary className="cursor-pointer text-sm font-medium select-none">조건 바꾸기</summary>
@@ -277,7 +414,7 @@ export function ResultPanel({ hit, info, onClose }: { hit: Hit; info: Info | nul
         </details>
         <Fold title="출처">
           <ul className="list-disc space-y-1 pl-5 text-sm text-muted-foreground">
-            {Object.entries<any>(output.sources ?? {}).map(([k, s]) => <li key={k}><b className="text-foreground">{k}</b>: {s}</li>)}
+            {Object.entries<any>({ ...(output.sources ?? {}), ...(hit.name === "h2_supply" ? output.result.sources : {}) }).map(([k, s]) => <li key={k}><b className="text-foreground">{k}</b>: {s}</li>)}
           </ul>
         </Fold>
         <Fold title="한계와 가정">

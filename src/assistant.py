@@ -28,7 +28,7 @@ COMPAT = {"gemini": ("https://generativelanguage.googleapis.com/v1beta/openai", 
           "ollama": (OLLAMA + "/v1", None), "custom": (None, "LLM_API_KEY")}  # OpenAI 호환 연결: (주소, 키 환경변수). custom 주소는 LLM_BASE_URL
 
 def tools():
-    """tools = 도구 정의. assistant_tools의 도구 7개(simulate, required_output, min_green, sweep_green, close_gap, compare_paths, breakeven_grid)를 Claude 도구 형식으로 돌려준다."""
+    """tools = 도구 정의. assistant_tools의 도구 8개(simulate, required_output, min_green, sweep_green, close_gap, compare_paths, breakeven_grid, h2_supply)를 Claude 도구 형식으로 돌려준다."""
     return [dict(name=n, description=TOOLS[n], input_schema=TOOL_SCHEMAS[n]) for n in TOOLS]
 
 

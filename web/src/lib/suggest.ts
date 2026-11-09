@@ -23,6 +23,13 @@ export function suggest(hit: Hit, info: Info | null): Suggestion[] {
     if (a.ets_price == null) out.push(["배출권 가격을 2만 원/t로 가정하면?", "simulate", { ...a, ets_price: 20000 }])
     if (gf) out.push([`전력배출계수 ${GF_WHATIF}을 가정하면?`, "simulate", { ...a, grid_factor: GF_WHATIF }])
   }
+  if (hit.name === "h2_supply") {
+    const eua = info?.h2_defaults?.eua_krw, base = { ...a }
+    if (eua && a.ets_price !== eua) out.push([`탄소 가격이 EU 수준(${plain(eua)}원/t)이면?`, "h2_supply", { ...base, ets_price: eua }])
+    if (gf) out.push([`전력배출계수 ${GF_WHATIF}을 가정하면?`, "h2_supply", { ...base, grid_factor: GF_WHATIF }])
+    if (a.ppa_krw_kwh !== 150) out.push(["재생에너지 PPA가 150원/kWh(정부 태양광 목표 발전단가)이면?", "h2_supply", { ...base, ppa_krw_kwh: 150 }])
+    if (a.target_abate_t == null) out.push([`순 저감 목표 ${man(a.h2_output_mt * 1e6)}만 t(쇳물 1t당 1t)를 두면?`, "h2_supply", { ...base, target_abate_t: a.h2_output_mt * 1e6 }])
+  }
   if (hit.name === "compare_paths") {
     if (gf) out.push([`전력배출계수 ${GF_WHATIF}을 가정하면?`, "compare_paths", { ...a, grid_factor: GF_WHATIF }])
     out.push(["수소환원 50만 t으로 이 목표를 내려면 무탄소 전력은?", "min_green", { h2_output_mt: 0.5, target_abate_t: a.target_abate_t, ...gfArgs }])

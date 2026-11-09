@@ -17,7 +17,7 @@ CASES = {"S1 전기로(전력망)": dict(), "S4 수소환원(전력망)": dict(e
 print(f"자체발전 = 총 {TOTAL_TWH} TWh x {SELF_SHARE:.1%} = {TOTAL_TWH*SELF_SHARE:.1f} TWh (ESG 페이지: 2024 제철소 사용 전력의 85.5% 자체 생산)")
 for name, kw in CASES.items():
     df = sweep_selfgen(CUTS, **kw)
-    df["배출권범위대비"] = df["breakeven_ets"].map(lambda v: "순저감 없음" if pd.isna(v) else "1만원 미만" if v < ETS_RANGE[0] else "범위 안" if v <= ETS_RANGE[1] else "3만원 초과")
+    df["배출권범위대비"] = df["breakeven_ets"].map(lambda v: "순저감 없음" if pd.isna(v) else f"{ETS_RANGE[0]:,}원 미만" if v < ETS_RANGE[0] else "범위 안" if v <= ETS_RANGE[1] else f"{ETS_RANGE[1]:,}원 초과")
     print(f"\n[{name}]"); print(df.round(2).to_string())
 print(f"\n※ 배출권 허용 범위 {ETS_RANGE[0]:,}~{ETS_RANGE[1]:,}원/t. 손익분기가 이보다 높으면 배출권 수익만으로는 전력비용을 못 덮는다.")
 

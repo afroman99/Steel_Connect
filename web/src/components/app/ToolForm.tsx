@@ -37,6 +37,17 @@ const FIELDS: Record<ToolName, Field[]> = {
     { kind: "num", name: "target_abate_t", label: "목표 순 저감 (만 tCO2/년)", scale: 10000 },
     { kind: "num", name: "grid_factor", label: "전력배출계수 (tCO2/MWh)", range: "grid_factor", blank: "기본" },
   ],
+  h2_supply: [
+    { kind: "num", name: "h2_output_mt", label: "수소환원 연 생산량 (만 t)", scale: 0.01, range: "h2_mt", rangeScale: 100, rangeUnit: "만 t" },
+    { kind: "num", name: "ets_price", label: "탄소(배출권) 가격 (원/tCO2)", range: "ets_price", blank: "기본", note: "K-ETS 2.95만 원, EU ETS 13.2만 원 (2026-11-09). 최근 1년 K-ETS 1.0~3.1만 원(ICAP)" },
+    { kind: "num", name: "ppa_krw_kwh", label: "재생에너지 직접PPA 단가 (원/kWh)", range: "ppa_krw_kwh", blank: "기본", note: "계약 단가. 망이용료 등 부대비용은 계산에서 더함" },
+    { kind: "num", name: "grid_factor", label: "전력배출계수 (tCO2/MWh)", range: "grid_factor", blank: "기본" },
+    { kind: "num", name: "green_supply_twh", label: "확보 가능한 재생에너지 (TWh/년)", blank: "비우면 제한 없음", note: "직접 넣는 가정값" },
+    { kind: "num", name: "target_abate_t", label: "목표 순 저감 (만 tCO2/년)", scale: 10000, blank: "비우면 목표 없음", note: "고로 대비 순 저감" },
+    { kind: "num", name: "h2_kg_t", label: "쇳물 1t당 수소 (kg)", range: "h2_kg_t", blank: "기본" },
+    { kind: "num", name: "elec_kwh_kg", label: "수전해 전력 (kWh/kg)", range: "elec_kwh_kg", blank: "기본" },
+    { kind: "select", name: "plan", label: "한전 요금제", note: "고압A/B/C + 선택Ⅰ~Ⅲ" },
+  ],
 }
 const FMT = { mt: (v: number) => `${plain(v * 100)}만 t/년`, pct: (v: number) => `${plain(v * 100)}%`, gf: (v: number) => `${plain(v)} tCO2/MWh` }
 const rangeText = (info: Info | null, f: Num | Sld) => {
@@ -49,12 +60,13 @@ const rangeText = (info: Info | null, f: Num | Sld) => {
 
 export function ToolForm({ tool, info, input, onRun }: { tool: ToolName; info: Info | null; input: Out; onRun: (args: Out) => void }) {
   const fields = FIELDS[tool]
+  const dflt = (name: string) => (tool === "h2_supply" ? info?.h2_defaults?.[name] : undefined) ?? info?.defaults[name] // h2_supply는 기본값이 simulate와 다르다(탄소 가격 등)
   const initial = () => {
     const v: Record<string, string> = {}
     for (const f of fields) {
       const x = input[f.name]
-      if (f.kind === "num") v[f.name] = x == null ? (f.name === "green_supply_twh" ? "0" : "") : String(+(x / (f.scale ?? 1)).toFixed(6))
-      else v[f.name] = String(x ?? info?.defaults[f.name] ?? "")
+      if (f.kind === "num") v[f.name] = x == null ? (f.name === "green_supply_twh" && tool !== "h2_supply" ? "0" : "") : String(+(x / (f.scale ?? 1)).toFixed(6))
+      else v[f.name] = String(x ?? dflt(f.name) ?? "")
     }
     return v
   }
@@ -110,7 +122,7 @@ export function ToolForm({ tool, info, input, onRun }: { tool: ToolName; info: I
               ) : (
                 <>
                   <label htmlFor={id} className="text-sm font-medium">{f.label}</label>
-                  <Input id={id} inputMode="decimal" value={vals[f.name]} placeholder={f.blank ? (f.blank === "기본" && info ? `비우면 기본 ${plain(info.defaults[f.name])}` : f.blank) : undefined} onChange={(e) => set(f.name, e.target.value)} />
+                  <Input id={id} inputMode="decimal" value={vals[f.name]} placeholder={f.blank ? (f.blank === "기본" && info ? `비우면 기본 ${plain(dflt(f.name))}` : f.blank) : undefined} onChange={(e) => set(f.name, e.target.value)} />
                 </>
               )}
               <p className="text-sm text-muted-foreground">{[f.note, "range" in f ? rangeText(info, f) : ""].filter(Boolean).join(". ")}</p>

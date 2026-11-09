@@ -22,14 +22,17 @@ from pathlib import Path
 
 from src.assistant import ask, client, provider
 from src.assistant_tools import REQUIRED, TOOL_SCHEMAS, TOOLS, call_tool
-from src.simulator import ETS_RANGE, PLANS, RANGE, Scenario
+from src.hydrogen import BUY_RANGE, ELEC_KWH_KG, ELEC_RANGE, EUA_KRW, GREEN_H2_KRW_KG, H2_KG_RANGE, H2_KG_T, KAU_NOW, PPA_DEFAULT
+from src.simulator import ETS_RANGE, PLANS, PPA_RANGE, RANGE, Scenario
 
 # fmt: off
 WEB = Path(__file__).resolve().parent.parent / "web"
 DIST, LEGACY = WEB / "dist", WEB / "legacy.html"  # 화면: React 빌드 결과(web/dist, cd web && npm run build). 없으면 옛 단일 HTML(legacy.html)로 대신한다
 RATE, MAX_Q, MAX_SESSIONS, MAX_BODY = (20, 3600), 500, 200, 20_000  # IP당 질문 20회/시간, 질문 500자, 보관 대화 200개, 요청 본문 20KB
 SESSIONS, HITS, CONN, LOCK = OrderedDict(), {}, {}, threading.Lock()  # 세션별 대화, IP별 질문 시각, LLM 연결(첫 질문 때 한 번 만듦)
-INFO = dict(tools=TOOLS, schemas=TOOL_SCHEMAS, required=REQUIRED, ranges={**RANGE, "ets_price": ETS_RANGE}, plans=list(PLANS), defaults=asdict(Scenario()))  # GET /api/tools 응답. 화면 슬라이더 범위·초기값
+INFO = dict(tools=TOOLS, schemas=TOOL_SCHEMAS, required=REQUIRED, plans=list(PLANS),  # GET /api/tools 응답. 화면 슬라이더 범위·초기값
+            ranges={**RANGE, "ets_price": ETS_RANGE, "ppa_krw_kwh": PPA_RANGE, "h2_kg_t": H2_KG_RANGE, "elec_kwh_kg": ELEC_RANGE, "green_h2_krw_kg": BUY_RANGE},
+            defaults=asdict(Scenario()), h2_defaults=dict(ets_price=KAU_NOW, ppa_krw_kwh=PPA_DEFAULT, h2_kg_t=H2_KG_T, elec_kwh_kg=ELEC_KWH_KG, green_h2_krw_kg=GREEN_H2_KRW_KG, eua_krw=EUA_KRW))  # h2_defaults: h2_supply 기본값(simulate와 다름)
 
 
 def llm_status():

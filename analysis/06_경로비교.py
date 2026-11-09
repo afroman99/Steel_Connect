@@ -26,7 +26,7 @@ PATHS = {"전기로(고철)": dict(eaf_mt=1, eaf_util=1, h2_mt=0), "수소환원
 rows = {}
 for n, kw in PATHS.items():
     r = simulate(**kw); p, c, k = r["power"], r["carbon"], r["cost"]
-    rows[n] = {"전력 TWh": p["add_twh"], "Scope 2 증가 만t": c["add_tco2"] / 1e4, "Scope 1 감축 만t": c["scope1_cut_tco2"] / 1e4, "순 저감 만t": c["abate_tco2"] / 1e4,
+    rows[n] = {"전력 TWh": p["add_twh"], "Scope 2 증가 만t": c["add_tco2"] / 1e4, "Scope 1 감축 만t": (c["scope1_cut_tco2"] or float("nan")) / 1e4, "순 저감 만t": c["abate_tco2"] / 1e4,
                "전력 1MWh당 저감 t": c["abate_per_mwh"], "전력비용 억원": k["total_eok"], "저감 1t당 전력비용 만원": (k["power_cost_per_tco2_krw"] or float("nan")) / 1e4}
 tab = pd.DataFrame(rows).T
 print(f"[경로 비교: 1백만 t, 전력배출계수 {GF}]"); print(tab.round(2).to_string())

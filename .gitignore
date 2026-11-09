@@ -15,4 +15,6 @@ __pycache__/
 .claude/
 # PDF 근거자료는 추적하지 않음
 *.pdf
+# ICAP 탄소 가격 원본은 재배포에 ICAP 사전 서면 허가가 필요해 올리지 않는다(약관 4항). 받는 법은 analysis/16 맨 위
+data/icap_systems.json
 .ruff_cache

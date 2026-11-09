@@ -1,4 +1,4 @@
-"""어시스턴트 연결(Claude Code 방식, API 키 불필요): `claude -p`가 계산 도구 7개(src/assistant_mcp.py)만 써서 계산하고 답한다.
+"""어시스턴트 연결(Claude Code 방식, API 키 불필요): `claude -p`가 계산 도구 8개(src/assistant_mcp.py)만 써서 계산하고 답한다.
 계산은 코드, 해석은 LLM. 내장 도구(Bash 등)는 모두 꺼서 모델이 다른 명령을 실행할 수 없고(--tools ""), 빈 폴더에서 사용자 설정 없이 실행해 개발 기록이 새지 않게 한다. 내 컴퓨터의 Claude Code 로그인을 쓰므로 구독 사용량이 차감된다.
 ask_full()은 답변과 도구 호출 기록(calls)을 돌려줘서 웹 화면의 결과 창에 쓴다. 실행: 프로젝트 루트에서 python3 analysis/13_어시스턴트_ClaudeCode.py "질문".
 API 키가 생기면 src/assistant.py의 다른 연결을 쓰면 된다(LLM_PROVIDER)."""
@@ -18,7 +18,7 @@ from src.assistant_tools import SYSTEM_PROMPT
 MODEL = "claude-sonnet-5-5"  # 사용자 결정(한도 절약): Sonnet 5.5로 고정. 별칭(sonnet)은 버전이 바뀔 수 있어 쓰지 않는다
 MCP = json.dumps({"mcpServers": {NAME: {"command": sys.executable, "args": [str(ROOT / "src/assistant_mcp.py")]}}})
 PREFIX = f"mcp__{NAME}__"
-PRIVACY = "로그인 계정, 이메일, 파일 경로, 컴퓨터 환경, 개발 기록 같은 사용자·개발자의 개인 정보는 알려 주지 않는다. 계산 도구 7개만 쓸 수 있고 다른 작업은 거절한다."
+PRIVACY = "로그인 계정, 이메일, 파일 경로, 컴퓨터 환경, 개발 기록 같은 사용자·개발자의 개인 정보는 알려 주지 않는다. 계산 도구 8개만 쓸 수 있고 다른 작업은 거절한다."
 HISTORY_TURNS, ANSWER_CHARS = 3, 1500  # 이어 가는 대화는 최근 3번만, 답변은 앞 1,500자만 다음 질문에 붙인다
 
 
