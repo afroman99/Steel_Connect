@@ -127,6 +127,9 @@ if __name__ == "__main__":
     p = argparse.ArgumentParser(description="제철공정의 저탄소 전환을 돕는 AI 어시스턴트 웹 화면")
     p.add_argument("--host", default="127.0.0.1")
     p.add_argument("--port", type=int, default=int(os.environ.get("PORT", 8000)))
+    p.add_argument("--llm", help="AI 연결 종류(api, gemini, groq, claude_code ...). 없으면 LLM_PROVIDER 환경변수나 키로 자동 선택. Claude Code 로그인으로 쓰려면 --llm claude_code")
     a = p.parse_args()
+    if a.llm:
+        os.environ["LLM_PROVIDER"] = a.llm
     print(f"http://{a.host}:{a.port} 에서 실행 중 (AI 연결: {llm_status() or '없음, 질문에 답할 수 없음'}). Ctrl+C로 끝냅니다.")
     ThreadingHTTPServer((a.host, a.port), Handler).serve_forever()

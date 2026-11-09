@@ -4,7 +4,7 @@ v0.4: 도구·스키마·시스템 프롬프트를 src/assistant_tools.py(TOOLS,
 
 연결(provider 순서): ANTHROPIC_API_KEY -> Anthropic API, GEMINI_API_KEY -> Gemini, GROQ_API_KEY -> Groq, LLM_BASE_URL(+LLM_API_KEY) -> 그 OpenAI 호환 주소,
 그 밖 -> Amazon Bedrock(AWS 자격증명, AWS_REGION 기본 ap-northeast-2). LLM_PROVIDER로 직접 고른다. 모델은 Claude는 CLAUDE_MODEL, 나머지는 LLM_MODEL.
-LLM_PROVIDER=ollama -> 내 PC의 Ollama(자동으로 고르지 않음). LLM_PROVIDER=claude_code -> analysis/13_어시스턴트_ClaudeCode.py의 ask()(claude -p, Claude Code 로그인 사용). 이 방식은 도구 호출 기록(calls)을 돌려주지 않는다.
+LLM_PROVIDER=ollama -> 내 PC의 Ollama(자동으로 고르지 않음). LLM_PROVIDER=claude_code -> analysis/13_어시스턴트_ClaudeCode.py의 ask()(claude -p, Claude Code 로그인 사용). 도구는 src/assistant_mcp.py(MCP)로만 쓰고 Bash 등 내장 도구는 꺼져 있다.
 실행: 프로젝트 루트에서 python -m src.assistant "질문"  |  인자 없이 실행하면 대화 모드  |  --tools 는 도구 정의만 출력(네트워크 없음)
 """
 
@@ -28,7 +28,7 @@ COMPAT = {"gemini": ("https://generativelanguage.googleapis.com/v1beta/openai", 
           "ollama": (OLLAMA + "/v1", None), "custom": (None, "LLM_API_KEY")}  # OpenAI 호환 연결: (주소, 키 환경변수). custom 주소는 LLM_BASE_URL
 
 def tools():
-    """tools = 도구 정의. assistant_tools의 도구 6개(simulate, required_output, min_green, sweep_green, compare_paths, breakeven_grid)를 Claude 도구 형식으로 돌려준다."""
+    """tools = 도구 정의. assistant_tools의 도구 7개(simulate, required_output, min_green, sweep_green, close_gap, compare_paths, breakeven_grid)를 Claude 도구 형식으로 돌려준다."""
     return [dict(name=n, description=TOOLS[n], input_schema=TOOL_SCHEMAS[n]) for n in TOOLS]
 
 
@@ -102,10 +102,12 @@ def client():
 
 def ask(question, history=None, conn=None, model=None, max_turns=8):
     """ask = 질문하기. LLM이 도구를 부르면 call_tool로 계산해 돌려주기를 반복하고, 최종 답변(answer)·도구 호출 기록(calls)·대화(messages)를 돌려준다.
-    calls는 숫자 일치율·인용 정확도·거절률 평가에 쓴다. history에 이전 messages를 넣으면 대화를 이어간다. claude_code는 대화를 잇지 않고 calls가 비어 있다."""
+    calls는 숫자 일치율·인용 정확도·거절률 평가에 쓴다. history에 이전 messages를 넣으면 대화를 이어간다. claude_code는 최근 3번의 대화를 글로 이어 붙이고, calls는 claude -p 출력에서 뽑는다."""
     kind, c = conn or client()
-    if kind == "claude_code":
-        return dict(answer=c.ask(question, model=model or os.environ.get("CLAUDE_MODEL") or c.MODEL), calls=[], messages=[], model=model or c.MODEL)
+    if kind == "claude_code":  # claude -p는 대화를 기억하지 않아 history의 최근 글을 질문 앞에 붙여 넘기고, 도구 호출 기록은 stream-json에서 뽑는다
+        model = model or os.environ.get("CLAUDE_MODEL") or c.MODEL
+        r = c.ask_full(question, history=history, model=model)
+        return dict(answer=r["answer"], calls=r["calls"], messages=list(history or []) + [{"role": "user", "content": question}, {"role": "assistant", "content": r["answer"]}], model=model)
     model = model or os.environ.get("LLM_MODEL" if kind in COMPAT else "CLAUDE_MODEL") or MODEL[kind]
     messages, calls = list(history or []) + [{"role": "user", "content": question}], []
     for _ in range(max_turns):

@@ -40,8 +40,12 @@ python3 analysis/04_민감도분석.py               # 토네이도, 몬테카�
 python3 analysis/05_검증.py                     # 내부 정합성 assert + 외부 수치 대조
 python3 analysis/06_경로비교.py                 # 전기로 vs 수소환원 경로 비교
 python3 analysis/07_배출계수_손익분기지도.py     # 전력배출계수 추세와 손익분기 지도
+python3 -m src.web --llm claude_code           # 웹 화면(http://127.0.0.1:8000). 내 PC의 Claude Code 로그인으로 AI 연결, API 키 불필요
+python3 -m src.web                             # 웹 화면, 키가 있으면 그 연결(ANTHROPIC_API_KEY 등), 없으면 계산기만
 ```
-`data/Steel_industry_data.csv`(UCI Steel Industry Energy Consumption)가 필요하다. 저장소에는 없으니 `data/`에 직접 넣는다.
+`data/Steel_industry_data.csv`(UCI Steel Industry Energy Consumption)는 저장소에 들어 있다.
+
+**Claude Code 연결(`--llm claude_code`)**: `claude` 명령이 설치·로그인된 PC에서만 된다. 모델은 `claude-sonnet-5-5`(`CLAUDE_MODEL`로 변경). Claude Code는 계산 도구 7개(`src/assistant_mcp.py`)만 쓸 수 있고 Bash 등 내장 도구는 꺼져 있다. 구독 사용량이 질문마다 차감되고 응답에 십수 초 걸린다.
 
 ## 데이터와 근거
 - UCI Steel Industry Energy Consumption (2018, 15분 간격 35,040행): 요금 시간대와 부하 형태 분석. 광양 소규모 사업장이라 제철소 대표가 아니고 방법 시연용이다.
