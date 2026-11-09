@@ -161,7 +161,7 @@ function SimulateView({ out }: { out: Out }) {
       </p>
       <Figures>
         <Figure title="추가 구매 전력" value={num(pw.add_twh)} unit="TWh/년" sub={`현재 구매 전력보다 ${num(pw.buy_increase_pct, 1)}% 늘어남`} />
-        <Figure title="순 저감 (음수면 순증가)" value={man(c.abate_tco2)} unit="만 tCO2/년" main sub={`Scope 1(직접 배출) 감축 ${man(c.scope1_cut_tco2)}만 t, Scope 2(구매 전력 배출) 증가 ${man(c.add_tco2)}만 t`} />
+        <Figure title="순 저감 (음수면 순증가)" value={man(c.abate_tco2)} unit="만 tCO2/년" main sub={`Scope 1(직접 배출) 감축 ${c.scope1_cut_tco2 == null ? "이 모델에서는 별도 산정하지 않음" : `${man(c.scope1_cut_tco2)}만 t`}, Scope 2(구매 전력 배출) 증가 ${man(c.add_tco2)}만 t`} />
         <Figure title="추가 전기요금" value={num(k.total_eok, 0)} unit="억 원/년" sub={`kWh당 ${num(k.unit_krw_kwh, 1)}원. 기본요금·부가요금·기금 포함`} />
         <Figure title="순 저감 1 t당 전력 비용" value={k.power_cost_per_tco2_krw == null ? "순 저감 없음" : num(k.power_cost_per_tco2_krw, 0)} unit={k.power_cost_per_tco2_krw == null ? undefined : "원/tCO2"} sub="설비 투자비와 원료비 절감은 빠진 값" />
       </Figures>

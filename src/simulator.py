@@ -1,13 +1,15 @@
-"""전환 시나리오 시뮬레이터 v0.5. 변수·출처·신뢰도는 reports/결과보고서.md 부록 E-1 참고.
+"""전환 시나리오 시뮬레이터 v0.6. 변수·출처·신뢰도는 reports/결과보고서.md 부록 E-1 참고.
 
 입력: simulate(**변수) 또는 SCENARIOS[이름]. 허용 범위 밖 값은 ValueError (어시스턴트가 "근거 없음"으로 거절하는 근거).
-출력: dict {input, power, carbon, cost, assumptions, sources}
+출력: dict {input, power, carbon, cost, assumptions, sources, model_version, notes}
+v0.6(안정화): NaN·무한대·문자열 입력 거절(finite_number), 고로를 대체하지 않은 전기로 생산분에도 직접배출 반영, posco_net은 공표 순감축을 Scope 1로 역분해하지 않아 scope1_* 값이 None(0 아님), 반환 목록·사전은 매번 복사.
 v0.5: 수소환원(S4) 경로와 탄소 저감 효율 지표 추가. v0.4: 요금제(고압A/B/C 선택Ⅰ~Ⅲ) 변수화, 기후환경·연료비조정요금·기금 반영, Scope 1 감축(전기로가 고로를 대체) 반영, 총 전력(total_twh) 변수화.
 시간대 비중은 UCI 분석(src/load_profile.py)에서 계산해 가져온다. 실행: 프로젝트 루트에서 python3 -m src.simulator
 """
 
 from dataclasses import asdict, dataclass
 from functools import cache
+import math
 from pathlib import Path
 
 # 아래 fmt: off는 자동 포맷터가 한 줄을 여러 줄로 풀어쓰지 못하게 하는 표시
@@ -74,25 +76,41 @@ SCENARIOS = {"S0": Scenario(eaf_mt=0), "S1": Scenario(), "S1P": Scenario(eaf_bas
              "S4": Scenario(eaf_mt=0, h2_mt=0.3), "S4G": Scenario(eaf_mt=0, h2_mt=0.3, h2_green=1.0), "S5": Scenario(h2_mt=0.3)}  # S4 수소환원(전력망 전력), S4G 수소환원(무탄소 전력), S5 전기로(S1)+수소환원(S4)
 
 
+def finite_number(name, value, lo=None, hi=None, *, positive=False):
+    """finite_number = 숫자 입력 확인. bool·문자열·NaN·무한대는 숫자로 받지 않고, 범위(lo~hi)나 양수 조건을 벗어나면 '근거 없음' ValueError."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ValueError(f"{name}={value!r}: 유한한 숫자가 아님 (근거 없음)")
+    try:
+        valid = math.isfinite(value)
+    except (OverflowError, TypeError):
+        valid = False
+    if not valid:
+        raise ValueError(f"{name}={value!r}: NaN이나 무한대는 사용할 수 없음 (근거 없음)")
+    if positive and value <= 0:
+        raise ValueError(f"{name}={value!r}: 0보다 커야 함 (근거 없음)")
+    if (lo is not None and value < lo) or (hi is not None and value > hi):
+        span = f"허용 범위 {lo}~{hi} 밖" if lo is not None and hi is not None else f"{lo} 이상이어야 함" if lo is not None else f"{hi} 이하여야 함"
+        raise ValueError(f"{name}={value!r}: {span} (근거 없음)")
+    return value
+
+
 def check_range(s):
-    """check_range = 범위 확인. 변수가 허용 범위를 벗어나면 '근거 없음'으로 거절(ValueError)한다."""
-    for k, (lo, hi) in RANGE.items():
-        v = getattr(s, k)
-        if isinstance(v, bool) or not isinstance(v, (int, float)):
-            raise ValueError(f"{k}={v!r}: 숫자가 아님 (근거 없음)")
-        if not lo <= v <= hi:
-            raise ValueError(f"{k}={getattr(s, k)}: 허용 범위 {lo}~{hi} 밖 (근거 없음)")
+    """check_range = 범위 확인. 변수가 허용 범위를 벗어나거나 숫자가 아니면 '근거 없음'으로 거절(ValueError)한다."""
+    for key, (lo, hi) in RANGE.items():
+        finite_number(key, getattr(s, key), lo, hi)
     if s.ets_price is not None:
-        v = s.ets_price
-        if isinstance(v, bool) or not isinstance(v, (int, float)) or not ETS_RANGE[0] <= v <= ETS_RANGE[1]:
-            raise ValueError(f"ets_price={v!r}: 허용 범위 {ETS_RANGE[0]}~{ETS_RANGE[1]}원/t 밖 (근거 없음)")
-    if s.eaf_basis not in ("bottom_up", "posco_net"):
+        finite_number("ets_price", s.ets_price, *ETS_RANGE)
+    if not isinstance(s.eaf_basis, str) or s.eaf_basis not in ("bottom_up", "posco_net"):
         raise ValueError(f"eaf_basis={s.eaf_basis!r}: bottom_up 또는 posco_net (근거 없음)")
+    finite_number("fund", s.fund, 0, 1)
     if s.fund not in FUNDS:
         raise ValueError(f"fund={s.fund}: {FUNDS} 중 하나 (근거 없음)")
-    for k, ok in (("band_rule", RULES), ("plan", PLANS)):
-        if not isinstance(getattr(s, k), str) or getattr(s, k) not in ok:
-            raise ValueError(f"{k}={getattr(s, k)}: {list(ok)} 중 하나 (근거 없음)")
+    for key, options in (("band_rule", RULES), ("plan", PLANS)):
+        value = getattr(s, key)
+        if not isinstance(value, str) or value not in options:
+            raise ValueError(f"{key}={value!r}: {list(options)} 중 하나 (근거 없음)")
+    if s.eaf_basis == "posco_net" and s.eaf_mt > 0 and s.bf_replace != 1:
+        raise ValueError("posco_net 모드는 고로 대체 비율 100%에서만 지원 (근거 없음)")
 
 
 @cache
@@ -126,30 +144,49 @@ def simulate(**kw):
     fund = (energy + basic + adder) * s.fund                              # 전력산업기반기금 (원)
     tco2 = (add - h2 * s.h2_green) * 1e6 * s.grid_factor                 # Scope 2 증가 (tCO2): 무탄소 전력분은 0
     share = out_mt * 1e6 * s.bf_replace                                  # 고로를 대체하는 전기로 생산량 (t)
-    eaf_cut = share * (s.bf_tco2_t - s.eaf_direct_t) if s.eaf_basis == "bottom_up" else share * (EAF_CLAIM_T + s.eaf_kwh_t / 1000 * s.grid_factor)  # 전기로 감축(tCO2). posco_net은 순감축 1.4에 전기로 전력 배출을 더해 총감축으로 바꿔 둠(아래에서 전력 배출을 빼면 순감축 1.4)
-    cut = eaf_cut + h2_mt * 1e6 * (s.h2_bf_t - s.h2_resid_t)  # Scope 1 감축 (tCO2): 전기로 + 수소환원
-    abate = cut - tco2                                                   # 순 저감 (tCO2, 음수면 순증가)
+    eaf_direct = out_mt * 1e6 * s.eaf_direct_t
+    h2_direct = h2_mt * 1e6 * s.h2_resid_t
+    h2_cut = h2_mt * 1e6 * (s.h2_bf_t - s.h2_resid_t)
+    claim_mode = s.eaf_basis == "posco_net" and out_mt > 0
+    if claim_mode:
+        # 공표 순감축은 Scope 1로 역분해하지 않는다.
+        eaf_net = share * EAF_CLAIM_T
+        other_scope2 = (h2 * (1 - s.h2_green) + loss) * 1e6 * s.grid_factor
+        abate = eaf_net + h2_cut - other_scope2
+        cut = None
+    else:
+        # 고로를 대체하지 않은 생산분에서도 전기로 직접배출은 발생한다.
+        eaf_cut = share * s.bf_tco2_t - eaf_direct
+        cut = eaf_cut + h2_cut
+        abate = cut - tco2
     return dict(
         input=asdict(s),
         power=dict(eaf_output_mt=out_mt, h2_output_mt=h2_mt, eaf_buy_twh=eaf, h2_buy_twh=h2, selfgen_loss_twh=loss, add_twh=add, buy_after_twh=BUY_TWH + add, buy_increase_pct=add / BUY_TWH * 100),
-        carbon=dict(add_tco2=tco2, scope1_cut_tco2=cut, net_tco2=tco2 - cut, abate_tco2=abate, abate_per_mwh=abate / (add * 1e6) if add else 0, scope2_after_t=SCOPE2_T + tco2, scope1_after_t=SCOPE1_T - cut, ets_value_eok=None if s.ets_price is None else abate * s.ets_price / 1e8,
-                    scope2_increase_pct=tco2 / SCOPE2_T * 100, scope1_cut_pct=cut / SCOPE1_T * 100),
+        carbon=dict(model_basis=s.eaf_basis, eaf_direct_tco2=eaf_direct, h2_direct_tco2=h2_direct, add_tco2=tco2, scope1_cut_tco2=cut, net_tco2=-abate, abate_tco2=abate, abate_per_mwh=abate / (add * 1e6) if add else 0, scope2_after_t=SCOPE2_T + tco2, scope1_after_t=None if cut is None else SCOPE1_T - cut, ets_value_eok=None if s.ets_price is None else abate * s.ets_price / 1e8,
+                    scope2_increase_pct=tco2 / SCOPE2_T * 100, scope1_cut_pct=None if cut is None else cut / SCOPE1_T * 100),
         cost=dict(avg_price_krw_kwh=price, energy_eok=energy / 1e8, basic_eok=basic / 1e8, adder_eok=adder / 1e8, fund_eok=fund / 1e8,
                   total_eok=(energy + basic + adder + fund) / 1e8, unit_krw_kwh=(energy + basic + adder + fund) / kwh if kwh else 0,
                   power_cost_per_tco2_krw=(energy + basic + adder + fund) / abate if abate > 0 else None),  # 전력비용 기준(설비 투자비 미포함), 순 저감이 없으면 None
-        assumptions=LOW_CONF, sources=SOURCES)
+        assumptions=list(LOW_CONF), sources=dict(SOURCES),
+        model_version="stability-1",
+        notes=["비용은 일정 부하·설정 부하율의 추정이며 VAT는 제외",
+               "무탄소 전력의 요금과 배출계수는 기존 모델 가정을 유지",
+               "posco_net에서는 직접배출 감축을 분해할 수 없어 해당 값은 null"] if claim_mode else
+              ["비용은 일정 부하·설정 부하율의 추정이며 VAT는 제외",
+               "무탄소 전력의 요금과 배출계수는 기존 모델 가정을 유지"])
 
 
 if __name__ == "__main__":
     for n, sc in SCENARIOS.items():
         r = simulate(**asdict(sc))
-        print(n, {k: None if v is None else round(v, 2) for d in ("power", "carbon", "cost") for k, v in r[d].items()})
+        print(n, {k: round(v, 2) if isinstance(v, (int, float)) else v for d in ("power", "carbon", "cost") for k, v in r[d].items()})
 
 
 def breakeven_grid(h2_kwh_t=3720, bf_t=1.99, resid_t=0.0):
     """breakeven_grid = 손익분기 전력배출계수(t/MWh). 이 값보다 전력이 더러우면 수소환원이 고로보다 배출을 늘린다. = (고로 배출 - 잔여 배출) / 전력 원단위(MWh/t)."""
-    if h2_kwh_t <= 0:
-        raise ValueError("h2_kwh_t는 0보다 커야 함")
+    finite_number("h2_kwh_t", h2_kwh_t, positive=True)
+    finite_number("bf_t", bf_t, 0)
+    finite_number("resid_t", resid_t, 0)
     return (bf_t - resid_t) / (h2_kwh_t / 1000)
 
 
@@ -157,7 +194,12 @@ def green_needed(gf, h2_kwh_t=3720, eaf_kwh_t=450, bf_t=1.99, resid_t=0.0, eaf_d
     """green_needed = 필요한 무탄소 전력 비율. 같은 1 t당 수소환원의 순 저감이 전기로(고철) 이상이 되려면 수소환원 전력 중 무탄소가 얼마(0~1)여야 하는지.
     수소환원 순 저감 = (bf_t - resid_t) - h2_kwh_t/1000 x gf x (1-g), 전기로 순 저감 = bf_t - eaf_direct_t - eaf_kwh_t/1000 x gf (같은 고로 기준, 상향식)를 같게 놓고 g를 푼다.
     eaf_net_t를 주면 전기로 순 저감을 그 값(예: 포스코 주장 1.4)으로 고정한다. 0이면 전력망 전력만으로도 충분(이미 충족, 음수는 0으로 자름), 1을 넘으면 무탄소 100%로도 전기로에 못 미친다. gf<=0이면 계산 불가(ValueError)."""
-    if gf <= 0 or h2_kwh_t <= 0:
-        raise ValueError("gf와 h2_kwh_t는 0보다 커야 함")
+    finite_number("gf", gf, positive=True)
+    finite_number("h2_kwh_t", h2_kwh_t, positive=True)
+    for key, value in (("eaf_kwh_t", eaf_kwh_t), ("bf_t", bf_t),
+                       ("resid_t", resid_t), ("eaf_direct_t", eaf_direct_t)):
+        finite_number(key, value, 0)
+    if eaf_net_t is not None:
+        finite_number("eaf_net_t", eaf_net_t)
     eaf = eaf_net_t if eaf_net_t is not None else bf_t - eaf_direct_t - eaf_kwh_t / 1000 * gf
     return max(0.0, 1 - (bf_t - resid_t - eaf) / (h2_kwh_t / 1000 * gf))

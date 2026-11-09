@@ -39,10 +39,10 @@ TOOL_SCHEMAS = {  # JSON Schema(입력 형식). 어떤 LLM SDK에서든 도구 �
 SYSTEM_PROMPT = """너는 '제철공정의 저탄소 전환을 돕는 AI 어시스턴트'(팀 스틸커넥트)다. 전기로·수소환원제철로 전환할 때의 전력·요금·탄소 시나리오를 다룬다. 자기소개를 요청받으면 이 이름과 역할로 소개한다. 모든 숫자는 도구로 계산하고, 직접 계산하거나 추정하지 않는다.
 - 도구 결과 status가 ask면 missing을 사용자에게 한 번에 되묻는다. 추측해서 채우지 않는다. 생산 규모나 목표 감축량이 없으면 반드시 묻는다.
 - refuse면 reason을 설명하고 답변을 유보한다. 범위 밖 값을 임의로 바꿔 다시 계산하지 않는다.
-- ok면 result의 숫자만 인용한다. defaults_used(사용자가 정하지 않아 기본값으로 계산한 변수)는 가정으로 밝히고, sources 중 쓴 것을 출처로 붙인다.
+- ok면 result의 숫자만 인용한다. null은 0이 아니라 해당 모델에서 분해하지 않은 값이다. feasible은 수학적 계산 가능 여부이며 실제 실행 가능성을 보장하지 않는다. status와 within_capacity를 함께 확인한다. defaults_used(사용자가 정하지 않아 기본값으로 계산한 변수)는 가정으로 밝히고, sources 중 쓴 것을 출처로 붙인다.
 - 도구가 없는 질문은 도구를 부르지 않고 근거 부족으로 거절한다: 미래 예측, 사내 실제 데이터, 투자비·회수기간, 실제 배출권 회피액, 미래 요금 인상률, 시간대별 공급으로 생산이 멈추는지 여부.
   실제 회피액 질문에는 가정 가격(ets_price)을 주면 참고 가치는 계산할 수 있다고 안내한다.
-- 부족분이 있으면(met=false) 되묻지 말고 close_gap으로 "무엇을 얼마나 바꾸면 메워지는가"를 보여 준다. 확보량(green_supply_twh)을 모르면 먼저 묻는다. levers를 결정(우리가 정함)·외부(바깥 조건)로 나눠 설명하고, in_range=false는 현실성이 낮다고 밝힌다. 한 번에 한 조건만 바꾼 값이며 조합은 계산하지 않았음을 밝힌다. 생산량 레버는 같은 목표를 더 큰 규모로 나누면 톤당 필요 감축이 줄어서 필요량이 준다는 뜻이다.
+- 부족분이 있으면(met=false) 되묻지 말고 close_gap으로 "무엇을 얼마나 바꾸면 메워지는가"를 보여 준다. 확보량(green_supply_twh)을 모르면 먼저 묻는다. levers를 결정(우리가 정함)·외부(바깥 조건)로 나눠 설명하고, in_range=false는 현재 모델 지원 범위 밖이라고 밝힌다. category가 goal_change이면 원래 목표를 낮춘 별도 안이고, production_change이면 생산량을 바꾼 안이라고 설명한다. technical_target은 달성 여부를 기술 검토할 목표이며 external_scenario는 직접 결정할 수 없는 외부 조건이다. 한 번에 한 조건만 바꾼 값이며 조합은 계산하지 않았음을 밝힌다. 생산량 레버는 같은 목표를 더 큰 규모로 나누면 톤당 필요 감축이 줄어서 필요량이 준다는 뜻이다.
 - 항상 밝힌다: 조건부 시나리오이며 예측이 아니다. 부족분은 연간 전력량 기준이라 시간대별 공급·저장은 반영하지 않았고 생산 지속 여부를 판단하지 않는다. 요금은 전력 요금만이다. 배출권 가치는 참고 가치다.
 - 한국어로 답한다. 숫자에는 단위를 붙이고, 전문용어 뒤에는 짧은 설명을 붙인다."""
 FUNCS = {"simulate": simulate, "required_output": required_output, "min_green": min_green, "sweep_green": sweep_green, "close_gap": close_gap, "compare_paths": compare_paths, "breakeven_grid": breakeven_grid}
@@ -68,4 +68,9 @@ def call_tool(name, args=None):
     out = dict(status="ok", tool=name, result=res, sources=SOURCES)
     if name == "simulate":
         out["defaults_used"] = {k: v for k, v in res["input"].items() if k not in args}
+    elif isinstance(res, dict) and "applied_input" in res:
+        out["effective_input"] = res["applied_input"]
+        # These are effective calculation conditions, including values solved by the tool.
+        out["defaults_used"] = {k: v for k, v in res["applied_input"].items()
+                                if k not in args and k not in ("eaf_mt", "h2_mt", "h2_util", "eaf_util", "h2_green") }
     return out

@@ -1,17 +1,19 @@
 """역방향 계산(목표 -> 필요 조건). simulator가 "전환하면 얼마?"라면 여기는 "목표를 맞추려면 무엇이 얼마나 필요?"에 답한다.
 입력은 simulate와 같은 변수(**kw)이고 허용 범위 밖은 ValueError. 생산량에 비례하는 값만 다루므로 selfgen_cut은 받지 않는다."""
 
-from src.simulator import RANGE, Scenario, check_range, simulate
+import math
+from dataclasses import asdict
+from src.simulator import RANGE, Scenario, check_range, finite_number, simulate
 
 # fmt: off
 PATHS = ("eaf", "h2")
 LIMIT_NOTE = "연간 전력량 기준. 시간대별 공급·저장은 반영하지 않아 생산 지속 여부를 판단하는 결과가 아님"
+EPS_TWH = 1e-9  # 연간 TWh의 수치 오차 허용(1kWh 상당)
 SWEEP_VARS = ("green_supply_twh", "h2_kwh_t", "grid_factor", "h2_resid_t", "target_abate_t", "h2_output_mt")
 
 
 def _check(target, **kw):
-    if isinstance(target, bool) or not isinstance(target, (int, float)) or not target > 0:
-        raise ValueError(f"target_abate_t={target!r}: 0보다 큰 숫자가 아님 (근거 없음)")
+    finite_number("target_abate_t", target, positive=True)
     if kw.get("selfgen_cut", 0):
         raise ValueError("selfgen_cut은 생산량에 비례하지 않아 역산에서 제외 (근거 없음)")
     check_range(Scenario(**kw))
@@ -23,13 +25,26 @@ def required_output(target_abate_t, path="eaf", **kw):
     if path not in PATHS:
         raise ValueError(f"path={path!r}: {PATHS} 중 하나 (근거 없음)")
     _check(target_abate_t, **kw)
-    one = simulate(**kw, **(dict(eaf_mt=1, eaf_util=1, h2_mt=0) if path == "eaf" else dict(eaf_mt=0, h2_mt=1, h2_util=1)))
+    overrides = (dict(eaf_mt=1, eaf_util=1, h2_mt=0) if path == "eaf"
+                 else dict(eaf_mt=0, h2_mt=1, h2_util=1))
+    applied = {**kw, **overrides}
+    one = simulate(**applied)
     per_mt = one["carbon"]["abate_tco2"]
     if per_mt <= 0:
         return dict(path=path, feasible=False, reason="1 t당 순 저감이 0 이하(전력배출계수가 손익분기보다 높거나 무탄소 비율 부족)")
     mt = target_abate_t / per_mt
-    return dict(path=path, feasible=True, required_mt=mt, power_twh=mt * one["power"]["add_twh"], cost_eok=mt * one["cost"]["total_eok"],
-                abate_per_t=per_mt / 1e6, abate_per_mwh=one["carbon"]["abate_per_mwh"], within_capacity=mt <= 2.5)
+    for name, value in (("required_mt", mt), ("power_twh", mt * one["power"]["add_twh"]),
+                        ("cost_eok", mt * one["cost"]["total_eok"])):
+        finite_number(name, value, 0)
+    prefix = "eaf" if path == "eaf" else "h2"
+    capacity_given = prefix + "_mt" in kw
+    annual_capacity = (kw[prefix + "_mt"] * kw.get(prefix + "_util", Scenario().__dict__[prefix + "_util"])) if capacity_given else None
+    within_model = mt <= 2.5 + 1e-12
+    within_capacity = mt <= annual_capacity + 1e-12 if capacity_given else within_model
+    status = "capacity_exceeded" if not within_capacity else ("model_range_exceeded" if not within_model else "calculated")
+    return dict(path=path, feasible=True, status=status, within_model_range=within_model,
+                available_output_mt=annual_capacity, applied_input=one["input"], required_mt=mt, power_twh=mt * one["power"]["add_twh"], cost_eok=mt * one["cost"]["total_eok"],
+                abate_per_t=per_mt / 1e6, abate_per_mwh=one["carbon"]["abate_per_mwh"], within_capacity=within_capacity)
 
 
 def min_green(h2_output_mt, target_abate_t, green_supply_twh=0.0, **kw):
@@ -37,24 +52,34 @@ def min_green(h2_output_mt, target_abate_t, green_supply_twh=0.0, **kw):
     필요 비율이 1을 넘으면 무탄소 100%로도 불가능(feasible=False). 확보 가능량은 사용자가 가정으로 넣는다(우리는 사내 공급 계획을 모른다).
     주의: 모두 연간 전력량 기준이다. 시간대별 공급·저장은 반영하지 않아 부족분만으로 생산 지속 여부를 판단할 수 없다(결과 note에 항상 포함)."""
     _check(target_abate_t, **kw)
-    if isinstance(h2_output_mt, bool) or not isinstance(h2_output_mt, (int, float)) or not 0 < h2_output_mt <= 2.5:
-        raise ValueError(f"h2_output_mt={h2_output_mt!r}: 0 초과 2.5 이하 (근거 없음)")
-    if green_supply_twh < 0:
-        raise ValueError("green_supply_twh는 0 이상")
+    finite_number("h2_output_mt", h2_output_mt, 0, 2.5, positive=True)
+    finite_number("green_supply_twh", green_supply_twh, 0)
     s = Scenario(**{**kw, "eaf_mt": 0, "h2_mt": h2_output_mt, "h2_util": 1})
     power = h2_output_mt * s.h2_kwh_t / 1000                               # 전력 TWh (= Mt x MWh/t)
     need_per_t = target_abate_t / (h2_output_mt * 1e6)                     # 목표 순 저감 (t/t)
     g = max(0.0, 1 - ((s.h2_bf_t - s.h2_resid_t) - need_per_t) / (s.h2_kwh_t / 1000 * s.grid_factor))
-    cost = simulate(**{**kw, "eaf_mt": 0, "h2_mt": h2_output_mt, "h2_util": 1})["cost"]["total_eok"]
-    out = dict(note=LIMIT_NOTE, power_twh=power, feasible=g <= 1, max_abate_t=h2_output_mt * 1e6 * (s.h2_bf_t - s.h2_resid_t), cost_eok=cost)
-    if g > 1:
-        return {**out, "reason": "무탄소 100%로도 목표 순 저감에 못 미침"}
-    return {**out, "green_share": g, "green_twh": g * power, "gap_twh": max(0.0, g * power - green_supply_twh), "met": g * power <= green_supply_twh}
+    finite_number("required_green_share", g, 0)
+    feasible = g <= 1 + 1e-12
+    if feasible:
+        g = min(g, 1.0)
+    computed = simulate(**{**asdict(s), "h2_green": min(g, 1.0)})
+    cost = computed["cost"]["total_eok"]
+    out = dict(note=LIMIT_NOTE, power_twh=power, feasible=feasible, applied_input=computed["input"], cost_basis="무탄소 전력도 같은 단가를 적용한 기존 요금 가정", max_abate_t=h2_output_mt * 1e6 * (s.h2_bf_t - s.h2_resid_t), cost_eok=cost)
+    if not feasible:
+        return {**out, "status": "target_unreachable", "met": False, "reason": "무탄소 100%로도 목표 순 저감에 못 미침"}
+    delta = g * power - green_supply_twh
+    met = delta <= EPS_TWH
+    return {**out, "status": "supply_sufficient" if met else "supply_shortfall",
+            "green_share": g, "green_twh": g * power,
+            "green_supply_twh": green_supply_twh,
+            "gap_twh": 0.0 if met else delta,
+            "surplus_twh": max(0.0, -delta), "met": met,
+            "verified_abate_t": computed["carbon"]["abate_tco2"]}
 
 
 def compare_paths(target_abate_t, **kw):
     """compare_paths = 같은 목표 순 저감을 전기로·수소환원(전력망·무탄소 50%·100%)으로 달성할 때 필요 생산량·전력·요금 비교(dict 리스트)."""
-    opts = (("전기로", "eaf", {}), ("수소환원(전력망)", "h2", {}), ("수소환원(무탄소 50%)", "h2", dict(h2_green=0.5)), ("수소환원(무탄소 100%)", "h2", dict(h2_green=1.0)))
+    opts = (("전기로", "eaf", {}), ("수소환원(전력망)", "h2", dict(h2_green=0.0)), ("수소환원(무탄소 50%)", "h2", dict(h2_green=0.5)), ("수소환원(무탄소 100%)", "h2", dict(h2_green=1.0)))
     return [dict(name=n, **required_output(target_abate_t, p, **{**kw, **o})) for n, p, o in opts]
 
 
@@ -64,19 +89,20 @@ def sweep_green(h2_output_mt, target_abate_t, vary, values, green_supply_twh=0.0
     if vary not in SWEEP_VARS:
         raise ValueError(f"vary={vary!r}: {SWEEP_VARS} 중 하나 (근거 없음)")
     if not isinstance(values, (list, tuple)) or not values or len(values) > 50:
-        raise ValueError("values는 1~50개의 목록")
+        raise ValueError("values는 1~50개의 목록 (근거 없음)")
     rows = []
     for v in values:
         a = dict(h2_output_mt=h2_output_mt, target_abate_t=target_abate_t, green_supply_twh=green_supply_twh, **kw)
         a[vary] = v
-        rows.append(dict(**{vary: v}, **min_green(a.pop("h2_output_mt"), a.pop("target_abate_t"), **a)))
+        result = min_green(a.pop("h2_output_mt"), a.pop("target_abate_t"), **a)
+        rows.append({**result, vary: v})
     return rows
 
 
 def close_gap(h2_output_mt, target_abate_t, green_supply_twh, **kw):
     """close_gap = 무탄소 전력이 부족할 때, 조건을 하나씩만 바꿔 부족분(gap_twh)을 0으로 만드는 값을 역산한다(나머지는 그대로). 부족분이 없으면 levers는 빈 목록.
     레버: 확보량 늘리기, 목표 낮추기, 생산량 조정, 전력 원단위 개선, 전력배출계수 하락, 전기로로 전환. kind는 우리가 정할 수 있는 '결정'인지 바깥 조건인 '외부'인지.
-    in_range=False면 시뮬레이터 허용 범위 밖이라 현실적이지 않다는 뜻이고, check_gap_twh는 그 값을 min_green에 다시 넣어 확인한 부족분(범위 밖이면 None).
+    in_range=False면 현재 모델의 지원 범위 밖이라는 뜻이고, check_gap_twh는 그 값을 min_green에 다시 넣어 확인한 부족분(범위 밖이면 None).
     주의: 연간 전력량 기준(note). 레버를 동시에 바꾸는 조합은 계산하지 않는다. 전환 비용·시점은 반영하지 않는다."""
     base = min_green(h2_output_mt, target_abate_t, green_supply_twh=green_supply_twh, **kw)
     if not base["feasible"] or base["met"]:
@@ -91,9 +117,16 @@ def close_gap(h2_output_mt, target_abate_t, green_supply_twh, **kw):
         except ValueError: return None
 
     def lever(name, label, kind, unit, now, new, **over):
-        rng = RANGE.get(name) if name in RANGE else None
-        ok = new is not None and new > 0 and (rng is None or rng[0] <= new <= rng[1])
-        return dict(lever=name, label=label, kind=kind, unit=unit, now=now, needed=new, in_range=bool(ok), check_gap_twh=check(**{name: new}) if ok else None)
+        rng = (0, 2.5) if name == "h2_output_mt" else RANGE.get(name)
+        ok = new is not None and math.isfinite(new) and new > 0 and (rng is None or rng[0] <= new <= rng[1])
+        checked = check(**{name: new}) if ok else None
+        ok = bool(ok and checked is not None)
+        category = {"green_supply_twh": "procurement", "target_abate_t": "goal_change",
+                    "h2_output_mt": "production_change", "h2_kwh_t": "technical_target",
+                    "grid_factor": "external_scenario"}[name]
+        return dict(lever=name, label=label, kind=kind, category=category, unit=unit,
+                    now=now, needed=new, in_range=ok,
+                    check_gap_twh=checked, resolves_gap=ok and checked <= EPS_TWH)
 
     Tmax = m * 1e6 * (D - K * gf * (1 - S / (m * K)))                         # 확보량 S로 달성 가능한 최대 목표
     a = K - D / gf                                                           # 생산량 1 Mt 늘 때 필요 무탄소 전력의 변화(음수면 생산을 늘릴수록 필요량이 준다)
@@ -104,6 +137,6 @@ def close_gap(h2_output_mt, target_abate_t, green_supply_twh, **kw):
          lever("h2_output_mt", "수소환원 생산량 조정(같은 목표를 더 큰/작은 규모로)", "결정", "백만 t", m, m2),
          lever("h2_kwh_t", "전력 원단위 개선(기술)", "외부", "kWh/t", s.h2_kwh_t, 1000 * (S / m + B / gf)),
          lever("grid_factor", "전력배출계수 하락(전력 믹스 개선)", "외부", "tCO2/MWh", gf, m * B / den if B > 0 and den > 0 else None)]
-    eaf = required_output(T, "eaf", **{k: v for k, v in kw.items() if k == "grid_factor"})
-    L.append(dict(lever="switch_to_eaf", label="같은 목표를 전기로로 달성(무탄소 전력 불필요)", kind="결정", unit="백만 t", now=m, needed=eaf.get("required_mt"), in_range=bool(eaf.get("within_capacity")), power_twh=eaf.get("power_twh"), cost_eok=eaf.get("cost_eok")))
+    eaf = required_output(T, "eaf", **kw)
+    L.append(dict(lever="switch_to_eaf", label="같은 목표의 전기로 비교안(원료·제품·설비 조건 별도 검토)", kind="결정", category="process_change", unit="백만 t", now=m, needed=eaf.get("required_mt"), in_range=bool(eaf.get("within_capacity")), power_twh=eaf.get("power_twh"), cost_eok=eaf.get("cost_eok"), applied_input=eaf.get("applied_input")))
     return {**base, "levers": L}
